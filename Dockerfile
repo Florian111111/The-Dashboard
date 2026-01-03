@@ -40,11 +40,52 @@ COPY . .
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # ===========================================
-# Environment variables (defaults, override with .env or docker env)
+# Build arguments (read from docker-compose or --build-arg)
 # ===========================================
-ENV NODE_ENV=production
-ENV NODE_PORT=3000
-ENV PYTHON_PORT=3001
+
+# API Keys
+ARG FINNHUB_API_KEY
+ARG GOOGLE_API_KEY
+ARG FRED_API_KEY
+
+# Server Configuration
+ARG NODE_ENV=production
+ARG ENVIRONMENT=production
+ARG NODE_PORT=3000
+ARG PYTHON_PORT=3001
+
+# Rate Limiting
+ARG SESSION_DURATION=300
+ARG COOLDOWN_DURATION=300
+ARG RATE_LIMIT_REQUESTS=100
+ARG RATE_LIMIT_WINDOW=60
+
+# Feature Flags
+ARG USE_YFINANCE_EXTRAS=false
+
+# ===========================================
+# Set environment variables from build args
+# ===========================================
+
+# API Keys
+ENV FINNHUB_API_KEY=${FINNHUB_API_KEY}
+ENV GOOGLE_API_KEY=${GOOGLE_API_KEY}
+ENV FRED_API_KEY=${FRED_API_KEY}
+
+# Server Configuration
+ENV NODE_ENV=${NODE_ENV}
+ENV ENVIRONMENT=${ENVIRONMENT}
+ENV NODE_PORT=${NODE_PORT}
+ENV PYTHON_PORT=${PYTHON_PORT}
+
+# Rate Limiting
+ENV SESSION_DURATION=${SESSION_DURATION}
+ENV COOLDOWN_DURATION=${COOLDOWN_DURATION}
+ENV RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS}
+ENV RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW}
+
+# Feature Flags
+ENV USE_YFINANCE_EXTRAS=${USE_YFINANCE_EXTRAS}
 
 # Expose ports
 EXPOSE 3000 3001

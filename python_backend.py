@@ -19,6 +19,119 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# ===========================================
+# Environment Variables Validation
+# ===========================================
+
+def check_environment_variables():
+    """
+    Check all required and optional environment variables.
+    Prints a status report to console on startup.
+    """
+    print("\n" + "=" * 60)
+    print("🔧 PYTHON BACKEND - ENVIRONMENT VARIABLES CHECK")
+    print("=" * 60)
+    
+    errors = []
+    warnings = []
+    
+    # Required API Keys
+    required_vars = {
+        "FINNHUB_API_KEY": os.getenv("FINNHUB_API_KEY"),
+    }
+    
+    # Optional but recommended API Keys
+    optional_vars = {
+        "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY"),
+        "FRED_API_KEY": os.getenv("FRED_API_KEY"),
+    }
+    
+    # Server Configuration
+    config_vars = {
+        "ENVIRONMENT": os.getenv("ENVIRONMENT", "development"),
+        "NODE_ENV": os.getenv("NODE_ENV", "production"),
+        "NODE_PORT": os.getenv("NODE_PORT", "3000"),
+        "PYTHON_PORT": os.getenv("PYTHON_PORT", "3001"),
+    }
+    
+    # Rate Limiting
+    rate_limit_vars = {
+        "SESSION_DURATION": os.getenv("SESSION_DURATION", "300"),
+        "COOLDOWN_DURATION": os.getenv("COOLDOWN_DURATION", "300"),
+        "RATE_LIMIT_REQUESTS": os.getenv("RATE_LIMIT_REQUESTS", "100"),
+        "RATE_LIMIT_WINDOW": os.getenv("RATE_LIMIT_WINDOW", "60"),
+    }
+    
+    # Feature Flags
+    feature_vars = {
+        "USE_YFINANCE_EXTRAS": os.getenv("USE_YFINANCE_EXTRAS", "false"),
+    }
+    
+    # Check required variables
+    print("\n📋 REQUIRED API KEYS:")
+    for var, value in required_vars.items():
+        if value:
+            # Show first 10 chars only for security
+            masked = value[:10] + "..." if len(value) > 10 else value
+            print(f"   ✅ {var} = {masked}")
+        else:
+            print(f"   ❌ {var} = NOT SET")
+            errors.append(f"{var} is required but not set!")
+    
+    # Check optional variables
+    print("\n📋 OPTIONAL API KEYS:")
+    for var, value in optional_vars.items():
+        if value:
+            masked = value[:10] + "..." if len(value) > 10 else value
+            print(f"   ✅ {var} = {masked}")
+        else:
+            print(f"   ⚠️  {var} = NOT SET")
+            warnings.append(f"{var} is not set. Some features may be disabled.")
+    
+    # Show server configuration
+    print("\n📋 SERVER CONFIGURATION:")
+    for var, value in config_vars.items():
+        print(f"   ℹ️  {var} = {value}")
+    
+    # Show rate limiting
+    print("\n📋 RATE LIMITING:")
+    for var, value in rate_limit_vars.items():
+        print(f"   ℹ️  {var} = {value}")
+    
+    # Show feature flags
+    print("\n📋 FEATURE FLAGS:")
+    for var, value in feature_vars.items():
+        print(f"   ℹ️  {var} = {value}")
+    
+    # Summary
+    print("\n" + "-" * 60)
+    if errors:
+        print("❌ ERRORS FOUND:")
+        for error in errors:
+            print(f"   • {error}")
+    
+    if warnings:
+        print("⚠️  WARNINGS:")
+        for warning in warnings:
+            print(f"   • {warning}")
+    
+    if not errors and not warnings:
+        print("✅ All environment variables are properly configured!")
+    elif not errors:
+        print("✅ Required variables OK, but some optional variables are missing.")
+    
+    print("=" * 60 + "\n")
+    
+    return len(errors) == 0
+
+# Run environment check on startup
+env_check_passed = check_environment_variables()
+
+if not env_check_passed:
+    print("❌ FATAL: Required environment variables are missing!")
+    print("   Please check your .env file or docker-compose.yml")
+    print("   The application may not work correctly.\n")
+
 # Feature flag: Set USE_YFINANCE_EXTRAS=True to enable yfinance as fallback
 # Default: False - yfinance causes delays and errors, Finnhub provides all needed data
 USE_YFINANCE_EXTRAS = os.getenv("USE_YFINANCE_EXTRAS", "False").lower() == "true"
@@ -39,19 +152,14 @@ if not USE_YFINANCE_EXTRAS:
 # ===========================================
 
 # Finnhub API Key (required for fundamentals data)
-# Get your free key at: https://finnhub.io/register
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
 
 if not FINNHUB_API_KEY:
-    raise ValueError("FINNHUB_API_KEY environment variable is required! Please set it in .env file or as environment variable.")
+    raise ValueError("FINNHUB_API_KEY environment variable is required! Please set it in .env file or docker-compose.yml")
 
 # Google Gemini API Key (required for AI SWOT analysis)
-# Get your free key at: https://makersuite.google.com/app/apikey
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
-if not GOOGLE_API_KEY:
-    print("[Python Backend] WARNING: GOOGLE_API_KEY not set. AI features will be disabled.")
 
 # FRED API Key (for macroeconomic data - used by frontend through this backend)
 FRED_API_KEY = os.getenv("FRED_API_KEY")
