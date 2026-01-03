@@ -1,0 +1,32 @@
+# ===========================================
+# Python Backend Dockerfile
+# FastAPI backend for Finnhub API and AI features
+# ===========================================
+
+FROM python:3.11-slim
+
+# Create app directory
+WORKDIR /app
+
+# Install dependencies first (for better caching)
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY python_backend.py ./
+COPY .env* ./
+
+# Environment
+ENV ENVIRONMENT=production
+ENV PYTHON_PORT=3001
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:3001/api/health')" || exit 1
+
+# Start server
+CMD ["python3", "-m", "uvicorn", "python_backend:app", "--host", "0.0.0.0", "--port", "3001"]
+

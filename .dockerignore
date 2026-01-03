@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Build outputs
+dist/
+build/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+logs/
+backend.log
+
+# Environment files (will be passed via Docker env)
+.env
+.env.local
+.env.*.local
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Test files
+test/
+tests/
+*.test.js
+*.spec.js
+
+# Batch files (Windows only)
+*.bat
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Keys file (sensitive)
+Keys.docx
+

@@ -1,0 +1,31 @@
+# ===========================================
+# Node.js Backend Dockerfile
+# Serves frontend and proxies Yahoo Finance/FRED APIs
+# ===========================================
+
+FROM node:20-alpine
+
+# Create app directory
+WORKDIR /app
+
+# Install dependencies first (for better caching)
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy application code
+COPY . .
+
+# Environment
+ENV NODE_ENV=production
+ENV NODE_PORT=3000
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/config || exit 1
+
+# Start server
+CMD ["node", "server.js"]
+

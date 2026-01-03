@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  # ===========================================
+  # Combined service (Node.js + Python)
+  # Use this for single-container deployment
+  # ===========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000" # Node.js frontend
+      - "3001:3001" # Python backend
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/config"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+# ===========================================
+# Alternative: Separate services
+# Uncomment below if you prefer separate containers
+# ===========================================
+#   nodejs:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.node
+#     ports:
+#       - "3000:3000"
+#     env_file:
+#       - .env
+#     environment:
+#       - NODE_ENV=production
+#     depends_on:
+#       - python
+#     restart: unless-stopped
+#
+#   python:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.python
+#     ports:
+#       - "3001:3001"
+#     env_file:
+#       - .env
+#     environment:
+#       - ENVIRONMENT=production
+#     restart: unless-stopped
+
