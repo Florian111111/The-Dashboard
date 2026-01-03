@@ -93,12 +93,11 @@ export class PriceChart extends HTMLElement{
 		const cacheKey = `${symbol}_${timeframe}`;
 		if(memoryCache.has(cacheKey)) return memoryCache.get(cacheKey);
 		
-		const key = getLocal(getStorageKeys().ALPHA_VANTAGE_KEY, '');
-		if(!key){
-			const mock = this.#mockSeries(timeframe);
-			memoryCache.set(cacheKey, mock);
-			return mock;
-		}
+		// Alpha Vantage API key is not configured - use mock data
+		// API keys are now handled server-side only
+		const mock = this.#mockSeries(timeframe);
+		memoryCache.set(cacheKey, mock);
+		return mock;
 		
 		// Für kurze Zeiträume verwende intraday-Daten
 		if(this.#isIntradayTimeframe(timeframe)){

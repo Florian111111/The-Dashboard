@@ -20,30 +20,6 @@ import { API_BASE_URL } from './config.js';
 
 ensureDefaultStorage();
 
-// Fetch API keys from backend config and store them locally
-import { getLocal, setLocal, getStorageKeys } from './utils/storage.js';
-const keys = getStorageKeys();
-
-// Initialize config from backend
-async function initConfig() {
-	try {
-		// Try to get config from Node.js backend (port 3000)
-		const response = await fetch('/api/config');
-		if (response.ok) {
-			const config = await response.json();
-			if (config.fredApiKey) {
-				setLocal(keys.FRED_KEY, config.fredApiKey);
-			}
-			if (config.geminiApiKey) {
-				setLocal(keys.GEMINI_KEY, config.geminiApiKey);
-			}
-		}
-	} catch (error) {
-		console.warn('Could not fetch config from backend:', error.message);
-	}
-}
-initConfig();
-
 class App {
 	constructor() {
 		this.currentPage = 'market-overview';

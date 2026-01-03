@@ -12,7 +12,7 @@ export async function fetchWithProxy(url, options = {}) {
 			const pathParts = urlObj.pathname.split('/');
 			const symbol = pathParts[pathParts.length - 1];
 			const params = new URLSearchParams(urlObj.search);
-			
+
 			// Determine endpoint based on URL structure
 			let backendUrl;
 			if (url.includes('/quoteSummary/')) {
@@ -28,7 +28,7 @@ export async function fetchWithProxy(url, options = {}) {
 			} else {
 				throw new Error('Unknown Yahoo Finance endpoint');
 			}
-			
+
 			const response = await fetch(backendUrl);
 			if (response.ok) {
 				return await response.json();
@@ -46,29 +46,29 @@ export async function fetchWithProxy(url, options = {}) {
 			console.warn('Local backend not available, trying public proxies:', error.message);
 		}
 	}
-	
+
 	// Fallback to public proxies
 	const proxies = [
 		`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
 		`https://corsproxy.io/?${encodeURIComponent(url)}`,
 		`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
 	];
-	
+
 	let lastError = null;
-	
+
 	for (const proxyUrl of proxies) {
 		try {
 			const response = await fetch(proxyUrl, {
 				method: 'GET',
 				...options
 			});
-			
+
 			if (!response.ok) {
 				throw new Error(`Proxy returned ${response.status}`);
 			}
-			
+
 			const data = await response.json();
-			
+
 			// Handle allorigins.win format
 			if (data.contents) {
 				if (data.contents.trim() === '' || data.contents === 'null') {
@@ -81,44 +81,40 @@ export async function fetchWithProxy(url, options = {}) {
 					return data.contents;
 				}
 			}
-			
+
 			// Handle other proxy formats (direct response)
 			return data;
-			
+
 		} catch (error) {
 			console.warn(`Proxy ${proxyUrl.substring(0, 30)}... failed:`, error.message);
 			lastError = error;
 			continue;
 		}
 	}
-	
+
 	throw new Error(`All proxies failed. Last error: ${lastError?.message || 'Unknown'}`);
 }
 
 /**
  * Fetch FRED data through local backend
+ * API key is read from .env on the backend - no need to pass it from frontend
  */
-export async function fetchFredWithProxy(seriesId, apiKey, params = {}) {
-	try {
-		const queryParams = new URLSearchParams({
-			series_id: seriesId,
-			api_key: apiKey,
-			file_type: 'json',
-			...params
-		});
-		
-		const backendUrl = `${BACKEND_URL}/api/fred/observations?${queryParams.toString()}`;
-		const response = await fetch(backendUrl);
-		
-		if (response.ok) {
-			return await response.json();
-		}
-		throw new Error(`Backend returned ${response.status}`);
-	} catch (error) {
-		console.warn('Local backend not available for FRED:', error.message);
-		// Fallback to public proxy
-		const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&${new URLSearchParams(params).toString()}`;
-		return fetchWithProxy(url);
+export async function fetchFredWithProxy(seriesId, params = {}) {
+	const queryParams = new URLSearchParams({
+		series_id: seriesId,
+		file_type: 'json',
+		...params
+	});
+
+	// Use relative URL to work with both localhost and production
+	const backendUrl = `/api/fred/observations?${queryParams.toString()}`;
+	const response = await fetch(backendUrl);
+
+	if (!response.ok) {
+		const errorData = await response.json().catch(() => ({}));
+		throw new Error(errorData.error || `FRED API returned ${response.status}`);
 	}
+
+	return await response.json();
 }
 

@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '../config.js';
-import { getLocal, getStorageKeys } from '../utils/storage.js';
 
 export class StockChart extends HTMLElement {
 	constructor() {
@@ -3468,16 +3467,16 @@ export class StockChart extends HTMLElement {
 
 		// Generate AI summary using Gemini API (direct call, same as SWOT analysis)
 		try {
-			// Fetch company information
-			const companyInfo = await this.fetchCompanyInfoForSummary();
+			// Call backend API for AI summary - API key is read from .env on server
+			const response = await fetch(`/api/ai-summary/${this.symbol}`);
 
-			// Generate AI summary using Gemini API
-			const keys = getStorageKeys();
-			const geminiKey = getLocal(keys.GEMINI_KEY);
-			if (!geminiKey) {
-				throw new Error('Gemini API key not configured. Please check your .env file.');
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.detail || `API error: ${response.status}`);
 			}
-			const summary = await this.callGeminiAPIForSummary(geminiKey, this.symbol, companyInfo);
+
+			const data = await response.json();
+			const summary = data.summary;
 
 			// Cache the summary
 			setCachedData(this.symbol, 'ai-summary', summary);
@@ -3612,129 +3611,6 @@ export class StockChart extends HTMLElement {
 			: '<div class="ai-summary-cache-info">💾 This summary will be cached for 4 hours.</div>';
 
 		content.innerHTML = cacheInfo + html;
-	}
-
-	async callGeminiAPIForSummary(apiKey, symbol, companyInfo) {
-		console.log('[AI Summary] Calling Gemini API for:', symbol);
-
-		const companyName = companyInfo.name || symbol;
-
-		const prompt = `Erstelle mir eine umfassende, klar strukturierte und optisch ansprechende Investment-Analyse zu ${companyName} (${symbol}).
-
-Die Analyse soll so aufgebaut sein, dass ich als Investor eine fundierte Entscheidung treffen kann, ob ich in ${companyName} investieren soll oder nicht – inklusive klarer Begründung.
-
-Bitte gliedere die Ausgabe übersichtlich mit klaren Überschriften, Bulletpoints, Tabellen und optischen Hervorhebungen.
-
-Sprache: Englisch| Stil: professionell, analytisch, objektiv | Zielgruppe: Investor
-
-Verfügbare Unternehmensdaten:
-- Symbol: ${symbol}
-- Name: ${companyName}
-- Sector: ${companyInfo.sector || 'N/A'}
-- Industry: ${companyInfo.industry || 'N/A'}
-${companyInfo.marketCap ? `- Market Cap: $${companyInfo.marketCap.toLocaleString()}` : ''}
-${companyInfo.currentPrice ? `- Current Price: $${companyInfo.currentPrice.toFixed(2)}` : ''}
-${companyInfo.peRatio ? `- P/E Ratio: ${companyInfo.peRatio.toFixed(2)}` : ''}
-${companyInfo.profitMargin ? `- Profit Margin: ${(companyInfo.profitMargin * 100).toFixed(2)}%` : ''}
-${companyInfo.revenueGrowth ? `- Revenue Growth: ${(companyInfo.revenueGrowth * 100).toFixed(2)}%` : ''}
-${companyInfo.earningsGrowth ? `- Earnings Growth: ${(companyInfo.earningsGrowth * 100).toFixed(2)}%` : ''}
-
-${companyInfo.description ? `Company Description: ${companyInfo.description.substring(0, 500)}...` : ''}
-
-Struktur & Inhalt zwingend einhalten:
-
-1️⃣ Kurz-Überblick (Executive Summary)
-
-– 2–4 prägnante Kernaussagen
-
-– Kurzfazit: Kaufen / Halten / Nicht Kaufen + kurze Begründung
-
-2️⃣ Unternehmensprofil
-
-– Geschäftsmodell & wichtigste Umsatzquellen
-
-– Marktposition & Wettbewerbsvorteile (Moat)
-
-– Relevante Risiken (Technologie, Regulierung, Abhängigkeiten, Markt)
-
-3️⃣ Aktuelle Geschäftslage & Fundamentaldaten
-
-– Umsatz- & Gewinnentwicklung (kurz Trend + Interpretation)
-
-– Margen, Cashflow, Verschuldung
-
-– Bewertung: P/E, PEG, EV/EBITDA → kurz einordnen
-
-– Vergleich mit relevanten Wettbewerbern
-
-4️⃣ Strategie & Zukunftsperspektiven
-
-– Wachstumstreiber (Produkte, Services, Innovationen)
-
-– Chancen (z. B. AI, Wearables, Services, Ökosystem)
-
-– Risiken und mögliche negative Szenarien
-
-5️⃣ Aktienanalyse & Investment Case
-
-– Chancen für Investoren
-
-– Risiken für Investoren
-
-– Für wen ist die Aktie geeignet? (Langfristinvestor, Wachstumsinvestor, Dividendeninvestor etc.)
-
-6️⃣ Klare Investment-Empfehlung
-
-– Kaufen / Halten / Nicht Kaufen
-
-– Begründung in 3–5 klaren Punkten
-
-– ggf. Hinweis auf Zeithorizont
-
-Bitte nutze, wenn möglich, aktuell verfügbare Daten und achte auf logische, verständliche Argumentation.
-
-Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
-
-		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-		const response = await fetch(url, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				contents: [{
-					parts: [{
-						text: prompt
-					}]
-				}]
-			})
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-		}
-
-		const data = await response.json();
-
-		let summary = "";
-		if (data.candidates && data.candidates.length > 0) {
-			const candidate = data.candidates[0];
-			if (candidate.content && candidate.content.parts) {
-				for (const part of candidate.content.parts) {
-					if (part.text) {
-						summary += part.text;
-					}
-				}
-			}
-		}
-
-		if (!summary) {
-			throw new Error('No summary generated by Gemini API');
-		}
-
-		return summary;
 	}
 }
 

@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '../config.js';
-import { getLocal, getStorageKeys } from '../utils/storage.js';
 
 export class MarketOverview extends HTMLElement {
 	constructor() {
@@ -4256,12 +4255,6 @@ export class MarketOverview extends HTMLElement {
 	}
 
 	async fetchFredData(seriesId, retries = 2) {
-		const keys = getStorageKeys();
-		const apiKey = getLocal(keys.FRED_KEY);
-		if (!apiKey) {
-			console.error('FRED API key not configured');
-			return null;
-		}
 		const timeParams = this.getTimeRangeParams(this.selectedTimeRange);
 
 		// Calculate how many data points we need based on time range
@@ -4269,9 +4262,9 @@ export class MarketOverview extends HTMLElement {
 
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
-				// Use proxy utility for FRED API (tries local backend first)
+				// Use proxy utility for FRED API - API key is read from .env on backend
 				const { fetchFredWithProxy } = await import('../utils/proxy.js');
-				const data = await fetchFredWithProxy(seriesId, apiKey, { limit: Math.max(daysToFetch, 365), sort_order: 'desc' });
+				const data = await fetchFredWithProxy(seriesId, { limit: Math.max(daysToFetch, 365), sort_order: 'desc' });
 
 				// Check for FRED API errors
 				if (data.error_message) {
@@ -4351,18 +4344,13 @@ export class MarketOverview extends HTMLElement {
 	}
 
 	async fetchFredHistoricalData(seriesId, retries = 2) {
-		const keys = getStorageKeys();
-		const apiKey = getLocal(keys.FRED_KEY);
-		if (!apiKey) {
-			console.error('FRED API key not configured');
-			return null;
-		}
 		const observationStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
+				// Use proxy utility for FRED API - API key is read from .env on backend
 				const { fetchFredWithProxy } = await import('../utils/proxy.js');
-				const data = await fetchFredWithProxy(seriesId, apiKey, { observation_start: observationStart, sort_order: 'asc' });
+				const data = await fetchFredWithProxy(seriesId, { observation_start: observationStart, sort_order: 'asc' });
 
 				// Check for FRED API errors
 				if (data.error_message) {
@@ -4698,13 +4686,20 @@ export class MarketOverview extends HTMLElement {
 			// Collect all market data (includes current time range)
 			const marketData = this.collectMarketData();
 
-			// Call Gemini API
-			const keys = getStorageKeys();
-			const geminiKey = getLocal(keys.GEMINI_KEY);
-			if (!geminiKey) {
-				throw new Error('Gemini API key not configured. Please check your .env file.');
+			// Call backend API for AI market summary - API key is read from .env on server
+			const response = await fetch('/api/ai-market-summary', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ marketData })
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.detail || `API error: ${response.status}`);
 			}
-			const summary = await this.callGeminiAPIForMarketSummary(geminiKey, marketData);
+
+			const data = await response.json();
+			const summary = data.summary;
 
 			// Cache the summary with time range in key
 			setCachedData('market', cacheKey, summary);
@@ -4808,112 +4803,6 @@ export class MarketOverview extends HTMLElement {
 		}
 
 		return marketData;
-	}
-
-	async callGeminiAPIForMarketSummary(apiKey, marketData) {
-		console.log('[AI Market Summary] Calling Gemini API');
-
-		const prompt = `Erstelle mir eine umfassende, klar strukturierte und optisch ansprechende Marktanalyse basierend auf den folgenden aktuellen Marktdaten.
-
-Die Analyse soll so aufgebaut sein, dass ich als Investor eine fundierte Übersicht über die aktuelle Marktsituation erhalte.
-
-Bitte gliedere die Ausgabe übersichtlich mit klaren Überschriften, Bulletpoints, Tabellen und optischen Hervorhebungen.
-
-Sprache: Englisch | Stil: professionell, analytisch, objektiv | Zielgruppe: Investor
-
-Aktuelle Marktdaten (Zeitraum: ${marketData.timeRange}):
-
-**Indices:**
-${marketData.indices.map(idx => `- ${idx.name} (${idx.symbol}): $${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}%)`).join('\n')}
-
-**Top Gainers:**
-${marketData.topMovers.gainers.map(g => `- ${g.symbol}: $${g.price.toFixed(2)} (${g.changePercent >= 0 ? '+' : ''}${g.changePercent.toFixed(2)}%)`).join('\n')}
-
-**Top Losers:**
-${marketData.topMovers.losers.map(l => `- ${l.symbol}: $${l.price.toFixed(2)} (${l.changePercent >= 0 ? '+' : ''}${l.changePercent.toFixed(2)}%)`).join('\n')}
-
-**Currencies:**
-${marketData.currencies.map(c => `- ${c.name} (${c.symbol}): ${c.price.toFixed(4)} (${c.changePercent >= 0 ? '+' : ''}${c.changePercent.toFixed(2)}%)`).join('\n')}
-
-Struktur & Inhalt zwingend einhalten:
-
-1️⃣ Executive Summary
-
-– 2–4 prägnante Kernaussagen über die aktuelle Marktsituation
-
-– Kurzfazit: Bullish / Neutral / Bearish + kurze Begründung
-
-2️⃣ Market Overview
-
-– Gesamtbewertung der Indices (Performance, Trends)
-
-– Regionale Unterschiede (Nordamerika, Europa, Asien)
-
-– Marktstimmung (Risiko-on vs. Risiko-off)
-
-3️⃣ Top Movers Analysis
-
-– Analyse der größten Gewinner und Verlierer
-
-– Mögliche Gründe für die Bewegungen
-
-– Sektoren/Industrien die besonders betroffen sind
-
-4️⃣ Currency & Macro Environment
-
-– Währungsbewegungen und deren Bedeutung
-
-– Makroökonomische Faktoren
-
-– Zentralbankpolitik und deren Auswirkungen
-
-5️⃣ Market Outlook & Risks
-
-– Kurzfristige Perspektive (nächste Tage/Woche)
-
-– Wichtige Risiken und Chancen
-
-– Empfehlungen für Investoren
-
-6️⃣ Key Takeaways
-
-– 3–5 wichtigste Punkte für Investoren
-
-– Handlungsempfehlungen
-
-Bitte nutze die bereitgestellten Daten und achte auf logische, verständliche Argumentation.
-
-Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
-
-		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-		const response = await fetch(url, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				contents: [{
-					parts: [{
-						text: prompt
-					}]
-				}]
-			})
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-		}
-
-		const data = await response.json();
-
-		if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts) {
-			throw new Error('Invalid response from Gemini API');
-		}
-
-		const summary = data.candidates[0].content.parts[0].text;
-		return summary;
 	}
 
 	displayMarketSummary(summary, fromCache) {

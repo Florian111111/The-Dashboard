@@ -14,7 +14,7 @@ export class FundamentalsPanel extends HTMLElement{
 			</style>
 			<h3>Fundamentals</h3>
 			<div id="content" class="grid"></div>
-			<div id="hint" class="hint" style="display:none">Add an Alpha Vantage key in Settings to load fundamentals.</div>
+			<div id="hint" class="hint" style="display:none">Fundamentals data is not available.</div>
 		`;
 		document.addEventListener('symbol-selected',(e)=>{
 			const s = e.detail?.symbol; if(s) this.load(s);
@@ -24,26 +24,9 @@ export class FundamentalsPanel extends HTMLElement{
 		this.load(sym);
 	}
 	async load(symbol){
-		const key = getLocal(getStorageKeys().ALPHA_VANTAGE_KEY,'');
-		if(!key){ this.#showHint(); return; }
-		this.#hideHint();
-		const url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${encodeURIComponent(symbol)}&apikey=${encodeURIComponent(key)}`;
-		try{
-			const res = await fetch(url);
-			if(!res.ok) throw new Error('net');
-			const d = await res.json();
-			this.#render({
-				Name: d.Name,
-				Sector: d.Sector,
-				MarketCap: d.MarketCapitalization,
-				PERatio: d.PERatio,
-				EPS: d.EPS,
-				DividendYield: d.DividendYield,
-				ProfitMargin: d.ProfitMargin,
-			});
-		}catch(e){
-			this.#render({});
-		}
+		// Alpha Vantage API is not configured - show hint
+		// API keys are now handled server-side only
+		this.#showHint();
 	}
 	#render(kv){
 		const content = this.shadowRoot.getElementById('content');

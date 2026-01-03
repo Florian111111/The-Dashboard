@@ -1,5 +1,3 @@
-import { getLocal, getStorageKeys } from '../utils/storage.js';
-
 export class StockMacro extends HTMLElement {
 	constructor() {
 		super();
@@ -84,22 +82,13 @@ export class StockMacro extends HTMLElement {
 	}
 
 	async load() {
-		const keys = getStorageKeys();
-		const apiKey = getLocal(keys.FRED_KEY);
-		if (!apiKey) {
-			console.error('FRED API key not configured');
-			this.shadowRoot.getElementById('content').innerHTML =
-				'<div class="loading">FRED API key not configured</div>';
-			return;
-		}
-
 		try {
-			// Use CORS proxy for FRED API
+			// Fetch macro data from backend - API key is read from .env on server
 			const [cpi, ur, gdp, fed] = await Promise.all([
-				this.fetchFredSeries('CPIAUCSL', apiKey),
-				this.fetchFredSeries('UNRATE', apiKey),
-				this.fetchFredSeries('GDP', apiKey),
-				this.fetchFredSeries('FEDFUNDS', apiKey)
+				this.fetchFredSeries('CPIAUCSL'),
+				this.fetchFredSeries('UNRATE'),
+				this.fetchFredSeries('GDP'),
+				this.fetchFredSeries('FEDFUNDS')
 			]);
 
 			const items = [];
@@ -112,15 +101,15 @@ export class StockMacro extends HTMLElement {
 		} catch (error) {
 			console.error('Error loading macro data:', error);
 			this.shadowRoot.getElementById('content').innerHTML =
-				'<div class="loading">Unable to load macro data (CORS restrictions)</div>';
+				'<div class="loading">Unable to load macro data</div>';
 		}
 	}
 
-	async fetchFredSeries(seriesId, apiKey) {
+	async fetchFredSeries(seriesId) {
 		try {
-			// Use proxy utility (tries local backend first)
+			// Use proxy utility - API key is read from .env on the backend
 			const { fetchFredWithProxy } = await import('../utils/proxy.js');
-			const data = await fetchFredWithProxy(seriesId, apiKey, {
+			const data = await fetchFredWithProxy(seriesId, {
 				observation_start: '2020-01-01',
 				limit: 1,
 				sort_order: 'desc'

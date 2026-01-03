@@ -394,16 +394,14 @@ app.get('/api/yahoo/quoteSummary/:symbol', async (req, res) => {
 });
 
 // ===========================================
-// Frontend Config Endpoint
-// Serves API keys to the frontend securely
+// Health Check Endpoint
 // ===========================================
 app.get('/api/config', (req, res) => {
+	// API keys are now read from .env on the backend only
+	// No keys are exposed to the frontend
 	res.json({
-		// Only expose keys that the frontend needs
-		// These are public/semi-public keys for free APIs
-		fredApiKey: FRED_API_KEY || '',
-		geminiApiKey: GEMINI_API_KEY || '',
-		// Don't expose sensitive keys here
+		status: 'ok',
+		message: 'API keys are configured on the server'
 	});
 });
 
@@ -428,10 +426,18 @@ const pythonApiPaths = [
 	'/api/profile',
 	'/api/heatmap-quotes',
 	'/api/ai-summary',
+	'/api/ai-market-summary',
 	'/api/swot',
 	'/api/session-status',
 	'/api/check-data',
 	'/api/health',
+	'/api/peer-comparison',
+	'/api/dax-heatmap',
+	'/api/sp500-heatmap',
+	'/api/nikkei225-heatmap',
+	'/api/nasdaq100-heatmap',
+	'/api/hangseng-heatmap',
+	'/api/market-cap',
 ];
 
 // Create proxy handler for Python backend

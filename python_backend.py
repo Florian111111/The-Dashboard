@@ -372,16 +372,16 @@ def api_health():
     return {"message": "Python Finnhub Backend", "status": "running"}
 
 
-# Frontend config endpoint - serves API keys to the frontend
+# Frontend config endpoint - NO API keys exposed
 @app.get("/api/config")
 def get_config():
     """
-    Serves configuration/API keys to the frontend.
-    Only expose keys that the frontend needs directly.
+    Returns configuration status (NO API keys exposed to frontend).
+    All API calls are handled by the backend.
     """
     return {
-        "fredApiKey": FRED_API_KEY or "",
-        "geminiApiKey": GOOGLE_API_KEY or "",
+        "status": "ok",
+        "message": "API keys are configured on the server"
     }
 
 
@@ -2032,8 +2032,8 @@ Please provide a comprehensive summary covering:
 
 Format the response in clear, readable paragraphs. Be specific and data-driven. Use the financial metrics and analyst data provided to support your analysis."""
 
-        # Call Gemini API - Use gemini-1.5-flash for better compatibility
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GOOGLE_API_KEY}"
+        # Call Gemini API - Use gemini-1.5-flash-latest
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GOOGLE_API_KEY}"
         
         headers = {
             "Content-Type": "application/json"
@@ -2100,6 +2100,275 @@ Format the response in clear, readable paragraphs. Be specific and data-driven. 
     except Exception as e:
         print(f"[Python Backend] Error in get_ai_summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/swot/{symbol}")
+async def get_swot_analysis(symbol: str, request: Request):
+    """
+    Generate SWOT analysis for a stock using Google Gemini API.
+    API key is read from .env file - never exposed to frontend.
+    """
+    try:
+        symbol_upper = symbol.upper()
+        
+        if not GOOGLE_API_KEY:
+            print("[Python Backend] ERROR: GOOGLE_API_KEY not configured")
+            raise HTTPException(
+                status_code=503, 
+                detail="SWOT Analysis feature is not available. Google API key not configured."
+            )
+        
+        # Fetch company information
+        print(f"[SWOT Analysis] Fetching company info for {symbol_upper}...")
+        company_info = {}
+        try:
+            finnhub_data = fetch_from_finnhub(symbol_upper)
+            if finnhub_data:
+                profile = finnhub_data.get("profile", {})
+                financials = finnhub_data.get("financials", {})
+                metrics = financials.get("metric", {}) if financials else {}
+                
+                company_info = {
+                    "name": profile.get("name") or symbol_upper,
+                    "sector": profile.get("finnhubIndustry") or "N/A",
+                    "industry": profile.get("finnhubIndustry") or "N/A",
+                    "marketCap": profile.get("marketCapitalization"),
+                    "pe": metrics.get("peTTM") or metrics.get("peExclExtraTTM"),
+                    "profitMargin": metrics.get("netProfitMarginTTM"),
+                    "revenueGrowth": metrics.get("revenueGrowthTTMYoy"),
+                }
+        except Exception as e:
+            print(f"[SWOT Analysis] Error fetching company info: {e}")
+        
+        # Build SWOT prompt
+        company_name = company_info.get("name", symbol_upper)
+        sector = company_info.get("sector", "N/A")
+        industry = company_info.get("industry", "N/A")
+        
+        prompt = f"""Analyze the company {company_name} ({symbol_upper}) and provide a SWOT analysis.
+
+Company Information:
+- Symbol: {symbol_upper}
+- Name: {company_name}
+- Sector: {sector}
+- Industry: {industry}
+{f"- Market Cap: ${company_info['marketCap']:,.0f}M" if company_info.get('marketCap') else ""}
+{f"- P/E Ratio: {company_info['pe']:.2f}" if company_info.get('pe') else ""}
+{f"- Profit Margin: {company_info['profitMargin']:.2f}%" if company_info.get('profitMargin') else ""}
+{f"- Revenue Growth: {company_info['revenueGrowth']:.2f}%" if company_info.get('revenueGrowth') else ""}
+
+Please provide a comprehensive SWOT analysis with the following structure:
+
+**STRENGTHS:**
+List 3-5 key strengths of the company (competitive advantages, market position, financial health, etc.)
+
+**WEAKNESSES:**
+List 3-5 key weaknesses or areas of concern (operational challenges, market risks, financial issues, etc.)
+
+**OPPORTUNITIES:**
+List 3-5 potential opportunities for growth (market expansion, new products, industry trends, etc.)
+
+**THREATS:**
+List 3-5 external threats the company faces (competition, regulation, economic factors, etc.)
+
+Be specific and data-driven where possible. Focus on factors most relevant to investors."""
+
+        # Call Gemini API
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GOOGLE_API_KEY}"
+        
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }]
+        }
+        
+        print(f"[SWOT Analysis] Calling Gemini API for {symbol_upper}...")
+        
+        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+        
+        if response.status_code != 200:
+            error_text = response.text
+            print(f"[SWOT Analysis] Gemini API error: {response.status_code} - {error_text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Gemini API error: {error_text}")
+        
+        data = response.json()
+        
+        # Extract analysis text
+        analysis = ""
+        if "candidates" in data and len(data["candidates"]) > 0:
+            candidate = data["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"]:
+                for part in candidate["content"]["parts"]:
+                    if "text" in part:
+                        analysis += part["text"]
+        
+        if not analysis:
+            raise HTTPException(status_code=500, detail="No analysis generated by Gemini API")
+        
+        return {
+            "symbol": symbol_upper,
+            "analysis": analysis,
+            "companyInfo": company_info
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[SWOT Analysis] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ai-market-summary")
+async def get_ai_market_summary(request: Request):
+    """
+    Generate AI market summary using Google Gemini API.
+    Accepts market data as POST body and returns AI-generated analysis.
+    API key is read from .env file - never exposed to frontend.
+    """
+    try:
+        if not GOOGLE_API_KEY:
+            print("[Python Backend] ERROR: GOOGLE_API_KEY not configured")
+            raise HTTPException(
+                status_code=503, 
+                detail="AI Summary feature is not available. Google API key not configured."
+            )
+        
+        # Get market data from request body
+        body = await request.json()
+        market_data = body.get("marketData", {})
+        
+        if not market_data:
+            raise HTTPException(status_code=400, detail="marketData is required")
+        
+        # Build prompt from market data
+        time_range = market_data.get("timeRange", "1D")
+        indices = market_data.get("indices", [])
+        top_movers = market_data.get("topMovers", {})
+        currencies = market_data.get("currencies", [])
+        
+        indices_text = "\n".join([
+            f"- {idx.get('name', idx.get('symbol'))} ({idx.get('symbol')}): ${idx.get('price', 0):.2f} ({'+' if idx.get('changePercent', 0) >= 0 else ''}{idx.get('changePercent', 0):.2f}%)"
+            for idx in indices
+        ]) if indices else "No index data available"
+        
+        gainers_text = "\n".join([
+            f"- {g.get('symbol')}: ${g.get('price', 0):.2f} ({'+' if g.get('changePercent', 0) >= 0 else ''}{g.get('changePercent', 0):.2f}%)"
+            for g in top_movers.get('gainers', [])
+        ]) if top_movers.get('gainers') else "No data"
+        
+        losers_text = "\n".join([
+            f"- {l.get('symbol')}: ${l.get('price', 0):.2f} ({'+' if l.get('changePercent', 0) >= 0 else ''}{l.get('changePercent', 0):.2f}%)"
+            for l in top_movers.get('losers', [])
+        ]) if top_movers.get('losers') else "No data"
+        
+        currencies_text = "\n".join([
+            f"- {c.get('name', c.get('symbol'))} ({c.get('symbol')}): {c.get('price', 0):.4f} ({'+' if c.get('changePercent', 0) >= 0 else ''}{c.get('changePercent', 0):.2f}%)"
+            for c in currencies
+        ]) if currencies else "No currency data available"
+        
+        prompt = f"""Create a comprehensive, well-structured market analysis based on the following current market data.
+
+The analysis should provide investors with a solid overview of the current market situation.
+
+Please structure the output clearly with headings, bullet points, and visual emphasis.
+
+Language: English | Style: professional, analytical, objective | Target: Investors
+
+Current Market Data (Time Range: {time_range}):
+
+**Indices:**
+{indices_text}
+
+**Top Gainers:**
+{gainers_text}
+
+**Top Losers:**
+{losers_text}
+
+**Currencies:**
+{currencies_text}
+
+Structure & Content (follow strictly):
+
+1️⃣ Executive Summary
+– 2-4 key statements about the current market situation
+– Quick verdict: Bullish / Neutral / Bearish + brief reasoning
+
+2️⃣ Market Overview
+– Overall assessment of indices (performance, trends)
+– Regional differences (North America, Europe, Asia)
+– Market sentiment (Risk-on vs. Risk-off)
+
+3️⃣ Top Movers Analysis
+– Analysis of biggest winners and losers
+– Possible reasons for the movements
+– Sectors/industries particularly affected
+
+4️⃣ Currency & Macro Environment
+– Currency movements and their significance
+– Macroeconomic factors
+– Central bank policy and its effects
+
+5️⃣ Market Outlook & Risks
+– Short-term perspective (next days/week)
+– Key risks and opportunities
+– Recommendations for investors
+
+6️⃣ Key Takeaways
+– 3-5 most important points for investors
+– Action recommendations
+
+Please use the provided data and ensure logical, understandable argumentation.
+The output should be high-quality, precise and visually well-structured."""
+
+        # Call Gemini API
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GOOGLE_API_KEY}"
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }]
+        }
+        
+        print(f"[AI Market Summary] Calling Gemini API...")
+        
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            error_text = response.text
+            print(f"[AI Market Summary] Gemini API error: {response.status_code} - {error_text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Gemini API error: {error_text}")
+        
+        data = response.json()
+        
+        # Extract summary text
+        summary = ""
+        if "candidates" in data and len(data["candidates"]) > 0:
+            candidate = data["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"]:
+                for part in candidate["content"]["parts"]:
+                    if "text" in part:
+                        summary += part["text"]
+        
+        if not summary:
+            raise HTTPException(status_code=500, detail="No summary generated by Gemini API")
+        
+        return {"summary": summary}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[AI Market Summary] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/price-changes/{symbol}")
 async def get_price_changes(symbol: str, request: Request):

@@ -1,24 +1,21 @@
-import { getLocal, getStorageKeys } from '../utils/storage.js';
+import { fetchFredWithProxy } from '../utils/proxy.js';
 
-async function fetchFredSeries(seriesId, apiKey){
-	const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json&observation_start=2015-01-01`;
+async function fetchFredSeries(seriesId) {
 	try {
-		const res = await fetch(url);
-		if(!res.ok) throw new Error('net');
-		const data = await res.json();
+		// Use backend proxy - API key is read from .env on the server
+		const data = await fetchFredWithProxy(seriesId, { observation_start: '2015-01-01' });
 		const obs = data.observations || [];
-		const last = [...obs].reverse().find(o=>o.value !== '.' && o.value !== '');
-		return last ? {date:last.date, value:Number(last.value)} : null;
-	} catch(error) {
-		// CORS error or network issue
-		console.warn(`FRED API CORS error for ${seriesId}:`, error.message);
-		throw new Error('CORS_BLOCKED');
+		const last = [...obs].reverse().find(o => o.value !== '.' && o.value !== '');
+		return last ? { date: last.date, value: Number(last.value) } : null;
+	} catch (error) {
+		console.warn(`FRED API error for ${seriesId}:`, error.message);
+		throw error;
 	}
 }
 
-export class MacroPanel extends HTMLElement{
-	constructor(){super();this.attachShadow({mode:'open'});}
-	connectedCallback(){
+export class MacroPanel extends HTMLElement {
+	constructor() { super(); this.attachShadow({ mode: 'open' }); }
+	connectedCallback() {
 		this.shadowRoot.innerHTML = `
 			<style>
 				h3{margin:0 0 8px 0}
@@ -37,29 +34,21 @@ export class MacroPanel extends HTMLElement{
 		`;
 		this.load();
 	}
-	async load(){
-		const key = getLocal(getStorageKeys().FRED_KEY,'');
-		if(!key){ this.#showHint(); return; }
-		this.#hideHint();
-		try{
+	async load() {
+		try {
 			const [cpi, ur] = await Promise.all([
-				fetchFredSeries('CPIAUCSL', key),
-				fetchFredSeries('UNRATE', key)
+				fetchFredSeries('CPIAUCSL'),
+				fetchFredSeries('UNRATE')
 			]);
 			this.shadowRoot.getElementById('cpi').textContent = cpi ? `${cpi.value.toFixed(2)} (${cpi.date})` : 'n/a';
 			this.shadowRoot.getElementById('ur').textContent = ur ? `${ur.value.toFixed(2)} (${ur.date})` : 'n/a';
-		}catch(e){
-			if(e.message === 'CORS_BLOCKED'){
-				this.shadowRoot.getElementById('cpi').textContent = 'CORS blocked';
-				this.shadowRoot.getElementById('ur').textContent = 'CORS blocked';
-				this.shadowRoot.getElementById('hint').style.display = 'block';
-				this.shadowRoot.getElementById('hint').textContent = 'FRED API blocked by CORS. Use a CORS proxy or server-side fetch.';
-			} else {
-				this.shadowRoot.getElementById('cpi').textContent = 'n/a';
-				this.shadowRoot.getElementById('ur').textContent = 'n/a';
-			}
+			this.shadowRoot.getElementById('hint').style.display = 'none';
+		} catch (e) {
+			console.error('Error loading macro data:', e);
+			this.shadowRoot.getElementById('cpi').textContent = 'n/a';
+			this.shadowRoot.getElementById('ur').textContent = 'n/a';
+			this.shadowRoot.getElementById('hint').textContent = 'Unable to load macro data';
+			this.shadowRoot.getElementById('hint').style.display = 'block';
 		}
 	}
-	#showHint(){ this.shadowRoot.getElementById('hint').style.display='block'; }
-	#hideHint(){ this.shadowRoot.getElementById('hint').style.display='none'; }
 }

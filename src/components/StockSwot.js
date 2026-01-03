@@ -1,4 +1,4 @@
-import { getLocal, setLocal, getStorageKeys } from '../utils/storage.js';
+import { getLocal, setLocal } from '../utils/storage.js';
 
 function keyFor(section, symbol) {
 	return `swot:${symbol}:${section}`;
@@ -506,13 +506,6 @@ export class StockSwot extends HTMLElement {
 			return;
 		}
 
-		const keys = getStorageKeys();
-		const geminiKey = getLocal(keys.GEMINI_KEY);
-		if (!geminiKey) {
-			alert('Gemini API key not configured. Please check your .env file.');
-			return;
-		}
-
 		if (!this.symbol) {
 			alert('No stock symbol available.');
 			return;
@@ -529,14 +522,17 @@ export class StockSwot extends HTMLElement {
 		console.log('Timestamp:', new Date().toISOString());
 
 		try {
-			// Fetch company information first
-			console.log('Fetching company info...');
-			const companyInfo = await this.fetchCompanyInfo(this.symbol);
-			console.log('Company info fetched:', companyInfo);
+			// Call backend API for SWOT analysis - API key is read from .env on server
+			console.log('Calling backend SWOT API...');
+			const response = await fetch(`/api/swot/${this.symbol}`);
 
-			// Generate SWOT analysis with Gemini (SINGLE REQUEST ONLY)
-			console.log('Calling Gemini API (single request)...');
-			const swotAnalysis = await this.callGeminiAPI(geminiKey, this.symbol, companyInfo);
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.detail || `API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			const swotAnalysis = data.analysis;
 			console.log('SWOT analysis received:', swotAnalysis);
 
 			// Parse and fill SWOT fields
@@ -651,113 +647,6 @@ export class StockSwot extends HTMLElement {
 
 			// Erfolg
 			return response;
-		}
-	}
-
-	async callGeminiAPI(apiKey, symbol, companyInfo) {
-		console.log('=== GEMINI API CALL START ===');
-		console.log('API Key (first 10 chars):', apiKey.substring(0, 10) + '...');
-		console.log('Symbol:', symbol);
-		console.log('Company Info:', companyInfo);
-
-		const prompt = `Analyze the stock ${symbol} (${companyInfo.name || symbol}) and provide a comprehensive SWOT analysis.
-
-Company Information:
-- Symbol: ${symbol}
-- Name: ${companyInfo.name || 'N/A'}
-- Sector: ${companyInfo.sector || 'N/A'}
-- Industry: ${companyInfo.industry || 'N/A'}
-${companyInfo.marketCap ? `- Market Cap: ${companyInfo.marketCap.toLocaleString()}` : ''}
-${companyInfo.currentPrice ? `- Current Price: $${companyInfo.currentPrice.toFixed(2)}` : ''}
-
-Please provide a SWOT analysis in the following JSON format:
-{
-  "strengths": [
-    {"point": "Most important strength", "priority": "high"},
-    {"point": "Second important strength", "priority": "high"},
-    {"point": "Less important strength", "priority": "medium"},
-    {"point": "Minor strength", "priority": "low"}
-  ],
-  "weaknesses": [
-    {"point": "Most critical weakness", "priority": "high"},
-    {"point": "Second weakness", "priority": "medium"},
-    {"point": "Minor weakness", "priority": "low"}
-  ],
-  "opportunities": [
-    {"point": "Major opportunity", "priority": "high"},
-    {"point": "Secondary opportunity", "priority": "medium"},
-    {"point": "Small opportunity", "priority": "low"}
-  ],
-  "threats": [
-    {"point": "Major threat", "priority": "high"},
-    {"point": "Secondary threat", "priority": "medium"},
-    {"point": "Minor threat", "priority": "low"}
-  ]
-}
-
-Rank each point by priority: "high" for most important, "medium" for moderately important, and "low" for less critical points.
-Provide 3-5 points per category, ranked by importance. Return ONLY valid JSON, no additional text.`;
-
-		// Use gemini-2.5-flash for free tier (as per official documentation)
-		// Use global endpoint (regional endpoints may not be available for free tier)
-		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-		console.log('Making fetch request to Gemini API...');
-		console.log('URL (without key):', url.split('?key=')[0] + '?key=***');
-
-		let response;
-		try {
-			response = await this.fetchWithRetries(
-				url,
-				{
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						contents: [{
-							parts: [{
-								text: prompt
-							}]
-						}]
-					})
-				},
-				3 // maxRetries
-			);
-
-			console.log('Response status:', response.status, response.statusText);
-		} catch (networkOrOverloadError) {
-			console.error('Gemini fetch failed after retries:', networkOrOverloadError);
-			throw networkOrOverloadError;
-		}
-
-		let data;
-		try {
-			data = await response.json();
-		} catch (parseError) {
-			console.error('JSON parse error:', parseError);
-			throw new Error('Invalid response from API');
-		}
-
-		const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-		if (!text) {
-			console.error('Empty response from API:', data);
-			throw new Error('Empty response from API. Please try again.');
-		}
-
-		// Extract JSON from response (might have markdown code blocks)
-		let jsonText = text.trim();
-		if (jsonText.startsWith('```')) {
-			jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-		}
-
-		try {
-			return JSON.parse(jsonText);
-		} catch (parseError) {
-			console.error('JSON parse error in response:', parseError);
-			console.error('Response text:', jsonText);
-			throw new Error('Failed to parse SWOT analysis. The API response was not in the expected format.');
 		}
 	}
 
