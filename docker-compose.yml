@@ -9,9 +9,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000" # Node.js frontend
-      - "3001:3001" # Python backend
+    # Don't map ports directly - Dokploy/Traefik handles routing
+    # Use 'expose' to make ports available to the reverse proxy
+    expose:
+      - "3000"
+      - "3001"
     env_file:
       - .env
     environment:
