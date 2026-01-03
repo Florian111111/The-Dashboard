@@ -14,11 +14,31 @@ services:
     expose:
       - "3000"
       - "3001"
-    env_file:
-      - .env
     environment:
-      - NODE_ENV=production
-      - ENVIRONMENT=production
+      # ===========================================
+      # API Keys (read from .env file)
+      # ===========================================
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - FRED_API_KEY=${FRED_API_KEY}
+      # ===========================================
+      # Server Configuration
+      # ===========================================
+      - NODE_ENV=${NODE_ENV:-production}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - NODE_PORT=${NODE_PORT:-3000}
+      - PYTHON_PORT=${PYTHON_PORT:-3001}
+      # ===========================================
+      # Rate Limiting
+      # ===========================================
+      - SESSION_DURATION=${SESSION_DURATION:-300}
+      - COOLDOWN_DURATION=${COOLDOWN_DURATION:-300}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
+      # ===========================================
+      # Feature Flags
+      # ===========================================
+      - USE_YFINANCE_EXTRAS=${USE_YFINANCE_EXTRAS:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/config"]
