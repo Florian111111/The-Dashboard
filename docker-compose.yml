@@ -9,20 +9,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # Pass .env variables as build args to Dockerfile
-        - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-        - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-        - FRED_API_KEY=${FRED_API_KEY}
-        - NODE_ENV=${NODE_ENV:-production}
-        - ENVIRONMENT=${ENVIRONMENT:-production}
-        - NODE_PORT=${NODE_PORT:-3000}
-        - PYTHON_PORT=${PYTHON_PORT:-3001}
-        - SESSION_DURATION=${SESSION_DURATION:-300}
-        - COOLDOWN_DURATION=${COOLDOWN_DURATION:-300}
-        - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
-        - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
-        - USE_YFINANCE_EXTRAS=${USE_YFINANCE_EXTRAS:-false}
+      # NOTE: API keys are NOT passed as build args
+      # They are set at runtime via 'environment' section below
     # Map container ports to host ports
     ports:
       - "3000"

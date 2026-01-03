@@ -59,17 +59,29 @@ docker run -d -p 3000:3000 --env-file .env stock-api-node
 
 ## Dokploy Deployment
 
-### Step 1: Prepare Environment Variables
+### ⚠️ IMPORTANT: API Keys Configuration
 
-In Dokploy, add these environment variables:
+**API keys are NOT baked into the Docker image.** They MUST be set at runtime via Dokploy's environment variables dashboard.
+
+This is by design for security - API keys should never be in your Git repository or Docker image.
+
+### Step 1: Set Environment Variables in Dokploy
+
+Go to your Dokploy application → **Environment** tab → Add these variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FINNHUB_API_KEY` | ✅ Yes | Your Finnhub API key |
+| `GOOGLE_API_KEY` | ✅ Yes | Your Google Gemini API key |
+| `FRED_API_KEY` | ⚡ Recommended | Your FRED API key |
 
 ```env
-# Required API Keys
+# Required API Keys (MUST be set in Dokploy dashboard)
 FINNHUB_API_KEY=your_finnhub_key
 GOOGLE_API_KEY=your_gemini_key
 FRED_API_KEY=your_fred_key
 
-# Server Config
+# Server Config (optional - defaults are fine)
 NODE_ENV=production
 ENVIRONMENT=production
 NODE_PORT=3000
