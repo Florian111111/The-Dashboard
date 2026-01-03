@@ -407,6 +407,99 @@ app.get('/api/config', (req, res) => {
 	});
 });
 
+// ===========================================
+// Proxy to Python Backend (port 3001)
+// Forward all Python API requests
+// ===========================================
+const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:3001';
+
+// List of Python backend endpoints to proxy
+const pythonApiPaths = [
+	'/api/fundamentals',
+	'/api/peers',
+	'/api/search',
+	'/api/analyst',
+	'/api/sentiment',
+	'/api/ownership',
+	'/api/earnings',
+	'/api/news',
+	'/api/price-changes',
+	'/api/dividends',
+	'/api/profile',
+	'/api/heatmap-quotes',
+	'/api/ai-summary',
+	'/api/swot',
+	'/api/session-status',
+	'/api/check-data',
+	'/api/health',
+];
+
+// Create proxy handler for Python backend
+async function proxyToPython(req, res) {
+	try {
+		const targetUrl = `${PYTHON_BACKEND_URL}${req.originalUrl}`;
+		console.log(`[Proxy] Forwarding to Python: ${req.method} ${targetUrl}`);
+
+		const fetchOptions = {
+			method: req.method,
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Forwarded-For': req.ip || req.connection.remoteAddress,
+				'X-Real-IP': req.ip || req.connection.remoteAddress,
+			},
+		};
+
+		// Include body for POST/PUT requests
+		if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+			fetchOptions.body = JSON.stringify(req.body);
+		}
+
+		const response = await fetch(targetUrl, fetchOptions);
+
+		// Forward status and headers
+		res.status(response.status);
+
+		// Forward important headers
+		const contentType = response.headers.get('content-type');
+		if (contentType) {
+			res.set('Content-Type', contentType);
+		}
+
+		// Forward rate limit headers
+		const retryAfter = response.headers.get('Retry-After');
+		if (retryAfter) {
+			res.set('Retry-After', retryAfter);
+		}
+		const rateLimitType = response.headers.get('X-RateLimit-Type');
+		if (rateLimitType) {
+			res.set('X-RateLimit-Type', rateLimitType);
+		}
+
+		// Get response data
+		const data = await response.text();
+
+		// Try to parse as JSON, otherwise send as-is
+		try {
+			const jsonData = JSON.parse(data);
+			res.json(jsonData);
+		} catch {
+			res.send(data);
+		}
+	} catch (error) {
+		console.error(`[Proxy] Error forwarding to Python backend:`, error.message);
+		res.status(502).json({
+			error: 'Python backend unavailable',
+			details: error.message,
+			hint: 'Make sure the Python backend is running on port 3001'
+		});
+	}
+}
+
+// Register proxy routes for all Python backend endpoints
+pythonApiPaths.forEach(path => {
+	app.all(`${path}*`, proxyToPython);
+});
+
 // Proxy endpoint for FRED API
 // Now uses server-side API key if not provided
 app.get('/api/fred/observations', async (req, res) => {

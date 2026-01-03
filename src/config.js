@@ -1,6 +1,9 @@
 /**
  * Application Configuration
  * API Base URL is determined based on environment
+ * 
+ * In production (Docker/Dokploy), all API requests go through Node.js server
+ * which proxies Python backend requests internally.
  */
 export const config = {
     // Determine API base URL based on environment
@@ -8,11 +11,6 @@ export const config = {
         // Check for runtime config (set by server or build)
         if (window.__API_BASE_URL__) {
             return window.__API_BASE_URL__;
-        }
-
-        // Check if we're in development (localhost)
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            return 'http://localhost:3001';
         }
 
         // In production, use the same origin or configured API URL
@@ -25,21 +23,24 @@ export const config = {
         const hostname = window.location.hostname;
         const port = window.location.port;
 
-        // Docker/Production: If accessed on port 3000, Python backend is on 3001
-        // If behind reverse proxy (no port), try same origin with /api prefix first
-        if (!port || port === '80' || port === '443') {
-            // Behind reverse proxy - use same origin, API routes to Python backend
-            // The reverse proxy should route /api/* to the Python backend
-            return `${protocol}//${hostname}`;
-        }
-
-        // If accessed on port 3000, Python backend is likely on 3001
-        if (port === '3000') {
+        // Development on localhost - can use Python backend directly
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            // If on port 3000 (Node.js), use same origin (Node.js proxies to Python)
+            if (port === '3000') {
+                return `${protocol}//${hostname}:${port}`;
+            }
+            // Direct Python backend access for development
             return `${protocol}//${hostname}:3001`;
         }
 
-        // Default: same origin with port 3001
-        return `${protocol}//${hostname}:3001`;
+        // Production: Always use same origin
+        // Node.js server proxies /api/* requests to Python backend internally
+        if (!port || port === '80' || port === '443') {
+            return `${protocol}//${hostname}`;
+        }
+
+        // Default: same origin (Node.js handles all API routing)
+        return `${protocol}//${hostname}:${port}`;
     },
 
     // Environment detection
