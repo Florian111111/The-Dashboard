@@ -3,8 +3,24 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 const path = require('path');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const app = express();
-const PORT = 3000;
+const PORT = process.env.NODE_PORT || 3000;
+
+// ===========================================
+// API Keys from environment variables
+// ===========================================
+const FRED_API_KEY = process.env.FRED_API_KEY;
+const GEMINI_API_KEY = process.env.GOOGLE_API_KEY;
+
+if (!FRED_API_KEY) {
+	console.warn('⚠️  WARNING: FRED_API_KEY not set in .env file');
+}
+if (!GEMINI_API_KEY) {
+	console.warn('⚠️  WARNING: GOOGLE_API_KEY not set in .env file');
+}
 
 // Enable CORS for all routes
 app.use(cors());
@@ -34,7 +50,7 @@ async function getYahooCrumb() {
 	if (yahooCrumb && Date.now() < crumbExpiry) {
 		return { crumb: yahooCrumb, cookies: yahooCookies };
 	}
-	
+
 	// Try multiple methods to get crumb
 	const methods = [
 		// Method 1: Standard crumb endpoint
@@ -54,7 +70,7 @@ async function getYahooCrumb() {
 			return { crumb: (await crumbResponse.text()).trim(), cookies: null };
 		}
 	];
-	
+
 	for (const method of methods) {
 		try {
 			const result = await method();
@@ -68,7 +84,7 @@ async function getYahooCrumb() {
 			continue;
 		}
 	}
-	
+
 	// If all methods fail, return null (we'll try without crumb)
 	console.warn('Could not obtain Yahoo crumb, will try without it');
 	return { crumb: null, cookies: null };
@@ -79,23 +95,23 @@ function validateSymbol(symbol) {
 	if (!symbol || typeof symbol !== 'string') {
 		throw new Error('Symbol is required');
 	}
-	
+
 	// Sanitize: remove whitespace, convert to uppercase
 	symbol = symbol.trim().toUpperCase();
-	
+
 	// Prevent path traversal and injection attacks
-	if (symbol.includes('..') || symbol.includes('/') || symbol.includes('\\') || 
-	    symbol.includes('?') || symbol.includes('&') || symbol.includes('#') ||
-	    symbol.includes('%') || symbol.length > 20) {
+	if (symbol.includes('..') || symbol.includes('/') || symbol.includes('\\') ||
+		symbol.includes('?') || symbol.includes('&') || symbol.includes('#') ||
+		symbol.includes('%') || symbol.length > 20) {
 		throw new Error('Invalid symbol format');
 	}
-	
+
 	// Validate format: Allow letters, numbers, dots, hyphens, caret (^), equals (=), X for Yahoo Finance symbols
 	// Examples: ^GSPC, EURUSD=X, GC=F, JPY=X
 	if (!/^[A-Z0-9.\-^=X]{1,20}$/.test(symbol)) {
 		throw new Error('Invalid symbol format');
 	}
-	
+
 	return symbol;
 }
 
@@ -116,24 +132,24 @@ app.get('/api/yahoo/quote', async (req, res) => {
 		if (!symbols) {
 			return res.status(400).json({ error: 'Symbols parameter is required' });
 		}
-		
+
 		// Try with crumb and cookies first
 		try {
 			const { crumb, cookies } = await getYahooCrumb();
 			const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}${crumb ? `&crumb=${crumb}` : ''}`;
-			
+
 			const headers = {
 				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 				'Accept': 'application/json',
 				'Referer': 'https://finance.yahoo.com/'
 			};
-			
+
 			if (cookies) {
 				headers['Cookie'] = cookies;
 			}
-			
+
 			const response = await fetch(url, { headers });
-			
+
 			if (response.ok) {
 				const data = await response.json();
 				// Check for errors in response
@@ -145,36 +161,36 @@ app.get('/api/yahoo/quote', async (req, res) => {
 		} catch (crumbError) {
 			console.warn('Quote API with crumb failed, trying Chart API fallback:', crumbError.message);
 		}
-		
+
 		// Fallback: Use Chart API to get quote data (more reliable)
 		// Parse symbols and fetch each one via Chart API
 		const symbolList = symbols.split(',').map(s => s.trim()).filter(s => s);
 		const quoteResults = [];
-		
+
 		// First, fetch all quote data from Chart API
 		for (const symbol of symbolList) {
 			try {
 				const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
 				const chartResponse = await fetch(chartUrl);
-				
-					if (chartResponse.ok) {
+
+				if (chartResponse.ok) {
 					const chartData = await chartResponse.json();
 					if (chartData.chart && chartData.chart.result && chartData.chart.result[0]) {
 						const result = chartData.chart.result[0];
 						const meta = result.meta;
-						
+
 						// Get market cap - try all possible field names (Chart API doesn't have it)
 						let marketCap = meta.marketCap || meta.market_cap || meta.market_cap_raw || null;
-						
+
 						// Only calculate if we have both price and shares outstanding
 						const sharesOutstanding = meta.sharesOutstanding || meta.shares_outstanding || null;
 						if (!marketCap && meta.regularMarketPrice && sharesOutstanding) {
 							marketCap = meta.regularMarketPrice * sharesOutstanding;
 						}
-						
+
 						// Chart API uses chartPreviousClose instead of previousClose
 						const previousClose = meta.previousClose || meta.chartPreviousClose;
-						
+
 						// Always include marketCap in response, even if null (will be filled from Finnhub)
 						const quoteResult = {
 							symbol: meta.symbol,
@@ -189,7 +205,7 @@ app.get('/api/yahoo/quote', async (req, res) => {
 							shortName: meta.shortName,
 							longName: meta.longName
 						};
-						
+
 						quoteResults.push(quoteResult);
 					}
 				}
@@ -197,14 +213,14 @@ app.get('/api/yahoo/quote', async (req, res) => {
 				console.warn(`Failed to fetch ${symbol} via Chart API:`, symbolError.message);
 			}
 		}
-		
+
 		// Note: Market caps are now fetched directly by the frontend via /api/heatmap-quotes
 		// This fallback is kept for backwards compatibility but shouldn't be needed
-		
+
 		if (quoteResults.length === 0) {
 			throw new Error('Failed to fetch quote data via Chart API fallback');
 		}
-		
+
 		// Return in Quote API format
 		res.json({
 			quoteResponse: {
@@ -225,15 +241,15 @@ app.get('/api/yahoo/chart/:symbol', async (req, res) => {
 		const symbol = validateSymbol(req.params.symbol);
 		const interval = validateInterval(req.query.interval || '1d');
 		const range = validateRange(req.query.range || '1y');
-		
+
 		const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
-		
+
 		// Use the same simple approach that works for charts
 		const response = await fetch(url);
 		if (!response.ok) {
 			throw new Error(`Yahoo Finance API returned ${response.status}`);
 		}
-		
+
 		const data = await response.json();
 		res.json(data);
 	} catch (error) {
@@ -251,63 +267,63 @@ app.get('/api/yahoo/options/:symbol', async (req, res) => {
 		// Validate and sanitize inputs
 		const symbol = validateSymbol(req.params.symbol);
 		const date = req.query.date ? parseInt(req.query.date) : null;
-		
+
 		// Validate date if provided
 		if (date && (isNaN(date) || date < 0)) {
 			return res.status(400).json({ error: 'Invalid date parameter' });
 		}
-	
+
 		// Get crumb and cookies for authentication
 		const { crumb, cookies } = await getYahooCrumb();
-		
+
 		let url;
 		if (date) {
 			url = `https://query1.finance.yahoo.com/v7/finance/options/${symbol}?date=${date}&crumb=${crumb}`;
 		} else {
 			url = `https://query1.finance.yahoo.com/v7/finance/options/${symbol}?crumb=${crumb}`;
 		}
-		
+
 		const headers = {
 			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 			'Accept': 'application/json',
 			'Referer': `https://finance.yahoo.com/quote/${symbol}/options`
 		};
-		
+
 		if (cookies) {
 			headers['Cookie'] = cookies;
 		}
-		
+
 		const response = await fetch(url, { headers });
-		
+
 		if (!response.ok) {
 			// Try without crumb as fallback
-			const fallbackUrl = date 
+			const fallbackUrl = date
 				? `https://query1.finance.yahoo.com/v7/finance/options/${symbol}?date=${date}`
 				: `https://query1.finance.yahoo.com/v7/finance/options/${symbol}`;
-			
+
 			const fallbackResponse = await fetch(fallbackUrl, {
 				headers: {
 					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 					'Accept': 'application/json'
 				}
 			});
-			
+
 			if (!fallbackResponse.ok) {
 				throw new Error(`Yahoo Finance API returned ${response.status} (with crumb) and ${fallbackResponse.status} (without crumb)`);
 			}
-			
+
 			const data = await fallbackResponse.json();
 			res.json(data);
 			return;
 		}
-		
+
 		const data = await response.json();
-		
+
 		// Check for errors in response
 		if (data.finance && data.finance.error) {
 			throw new Error(`Yahoo Finance API error: ${data.finance.error.description || data.finance.error.code}`);
 		}
-		
+
 		res.json(data);
 	} catch (error) {
 		console.error(`Error fetching options for ${symbol}:`, error);
@@ -320,80 +336,102 @@ app.get('/api/yahoo/quoteSummary/:symbol', async (req, res) => {
 		// Validate and sanitize inputs
 		const symbol = validateSymbol(req.params.symbol);
 		const modules = req.query.modules || 'defaultKeyStatistics';
-		
+
 		// Validate modules parameter (prevent injection)
 		if (!/^[a-zA-Z,]+$/.test(modules)) {
 			return res.status(400).json({ error: 'Invalid modules parameter' });
 		}
-		
+
 		console.log(`[QuoteSummary] Attempting direct API for ${symbol} (may fail due to auth)`);
-		
+
 		// Try direct API call (usually fails with 401/404 due to authentication)
 		const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}`;
 		const response = await fetch(url);
-		
+
 		if (!response.ok) {
 			// Try v11 as fallback
 			const v11Url = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${symbol}?modules=${modules}`;
 			const v11Response = await fetch(v11Url);
-			
+
 			if (!v11Response.ok) {
 				throw new Error(`Yahoo Finance API returned ${response.status} (v10) and ${v11Response.status} (v11). Use Chart API metadata instead.`);
 			}
-			
+
 			const data = await v11Response.json();
-			
+
 			if (data.finance && data.finance.error) {
 				throw new Error(data.finance.error.description || 'Yahoo Finance API error');
 			}
-			
+
 			if (!data.quoteSummary || !data.quoteSummary.result || data.quoteSummary.result.length === 0) {
 				throw new Error('No data in v11 response');
 			}
-			
+
 			console.log(`[QuoteSummary] Success with v11 for ${symbol}`);
 			return res.json(data);
 		}
-		
+
 		const data = await response.json();
-		
+
 		if (data.finance && data.finance.error) {
 			throw new Error(data.finance.error.description || 'Yahoo Finance API error');
 		}
-		
+
 		if (!data.quoteSummary || !data.quoteSummary.result || data.quoteSummary.result.length === 0) {
 			throw new Error('No data in response');
 		}
-		
+
 		console.log(`[QuoteSummary] Success with v10 for ${symbol}`);
 		res.json(data);
-		
+
 	} catch (error) {
 		console.error(`[QuoteSummary] Error for ${req.params.symbol}:`, error.message);
-		res.status(500).json({ 
+		res.status(500).json({
 			error: error.message,
 			details: 'Quote Summary API is unreliable. Frontend should use Chart API metadata instead.'
 		});
 	}
 });
 
+// ===========================================
+// Frontend Config Endpoint
+// Serves API keys to the frontend securely
+// ===========================================
+app.get('/api/config', (req, res) => {
+	res.json({
+		// Only expose keys that the frontend needs
+		// These are public/semi-public keys for free APIs
+		fredApiKey: FRED_API_KEY || '',
+		geminiApiKey: GEMINI_API_KEY || '',
+		// Don't expose sensitive keys here
+	});
+});
+
 // Proxy endpoint for FRED API
+// Now uses server-side API key if not provided
 app.get('/api/fred/observations', async (req, res) => {
 	try {
 		const { series_id, api_key, ...params } = req.query;
-		
-		if (!series_id || !api_key) {
-			return res.status(400).json({ error: 'series_id and api_key are required' });
+
+		// Use provided api_key or fall back to server-side key
+		const effectiveApiKey = api_key || FRED_API_KEY;
+
+		if (!series_id) {
+			return res.status(400).json({ error: 'series_id is required' });
 		}
-		
-		const queryString = new URLSearchParams({ series_id, api_key, file_type: 'json', ...params }).toString();
+
+		if (!effectiveApiKey) {
+			return res.status(500).json({ error: 'FRED API key not configured. Please set FRED_API_KEY in .env file.' });
+		}
+
+		const queryString = new URLSearchParams({ series_id, api_key: effectiveApiKey, file_type: 'json', ...params }).toString();
 		const url = `https://api.stlouisfed.org/fred/series/observations?${queryString}`;
-		
+
 		const response = await fetch(url);
 		if (!response.ok) {
 			throw new Error(`FRED API returned ${response.status}`);
 		}
-		
+
 		const data = await response.json();
 		res.json(data);
 	} catch (error) {

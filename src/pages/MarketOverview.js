@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config.js';
+import { getLocal, getStorageKeys } from '../utils/storage.js';
 
 export class MarketOverview extends HTMLElement {
 	constructor() {
@@ -10,7 +11,7 @@ export class MarketOverview extends HTMLElement {
 		this.searchController = null; // AbortController for search requests
 		this.currentSearchQuery = null; // Track current search query to avoid race conditions
 	}
-	
+
 	connectedCallback() {
 		this.shadowRoot.innerHTML = `
 			<style>
@@ -2391,40 +2392,40 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Theme toggle functionality - MUST be first so charts render with correct colors
 		this.setupThemeToggle();
-		
+
 		// Features menu
 		this.setupFeaturesMenu();
-		
+
 		// Time range selector functionality
 		this.setupTimeRangeSelector();
-		
+
 		// Search functionality with autocomplete
 		this.setupSearchAutocomplete();
-		
+
 		// Listen for rate limit cooldown events
 		window.addEventListener('rate-limit-cooldown', (e) => {
 			this.handleRateLimitCooldown(e.detail.active);
 		});
-		
+
 		// Setup touch gestures for mobile
 		this.setupTouchGestures();
-		
+
 		// Load market data AFTER theme is set
 		this.loadMarketData();
-		
+
 		// Top Performers ticker setup
 		this.setupTopPerformersTicker();
-		
+
 		// Mobile rotate overlay - continue button
 		const rotateOverlay = this.shadowRoot.getElementById('mobile-rotate-overlay');
 		const continueBtn = this.shadowRoot.getElementById('rotate-continue-btn');
 		continueBtn?.addEventListener('click', () => {
 			rotateOverlay?.classList.add('hidden');
 		});
-		
+
 		// Disclaimer link
 		const disclaimerLink = this.shadowRoot.getElementById('disclaimer-link-full');
 		disclaimerLink?.addEventListener('click', (e) => {
@@ -2432,35 +2433,35 @@ export class MarketOverview extends HTMLElement {
 			window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'disclaimer' } }));
 		});
 	}
-	
+
 	async setupTopPerformersTicker() {
 		const tickerBar = this.shadowRoot.getElementById('ticker-bar');
 		const tickerContent = this.shadowRoot.getElementById('ticker-content');
 		const modal = this.shadowRoot.getElementById('performers-modal');
 		const closeBtn = this.shadowRoot.getElementById('performers-close');
 		const performersGrid = this.shadowRoot.getElementById('performers-grid');
-		
+
 		// Load top performers data
 		await this.loadTopPerformers();
-		
+
 		// Ticker bar click handler - open modal
 		tickerBar?.addEventListener('click', () => {
 			modal?.classList.add('visible');
 			this.renderPerformersModal('gainers');
 		});
-		
+
 		// Close modal
 		closeBtn?.addEventListener('click', () => {
 			modal?.classList.remove('visible');
 		});
-		
+
 		// Close on overlay click
 		modal?.addEventListener('click', (e) => {
 			if (e.target === modal) {
 				modal.classList.remove('visible');
 			}
 		});
-		
+
 		// Tab switching
 		const tabs = this.shadowRoot.querySelectorAll('.performers-tab');
 		tabs.forEach(tab => {
@@ -2470,7 +2471,7 @@ export class MarketOverview extends HTMLElement {
 				this.renderPerformersModal(tab.dataset.type);
 			});
 		});
-		
+
 		// Close on Escape key
 		document.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape' && modal?.classList.contains('visible')) {
@@ -2478,26 +2479,26 @@ export class MarketOverview extends HTMLElement {
 			}
 		});
 	}
-	
+
 	async loadTopPerformers() {
 		const tickerContent = this.shadowRoot.getElementById('ticker-content');
-		
+
 		try {
 			// Fetch gainers and losers from Yahoo Finance via proxy
 			const { fetchWithProxy } = await import('../utils/proxy.js');
-			
+
 			// Use Yahoo Finance screener API for market movers
 			const gainersUrl = 'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_gainers&count=25';
 			const losersUrl = 'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_losers&count=25';
 			const activeUrl = 'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=most_actives&count=25';
-			
+
 			// Fetch all in parallel
 			const [gainersData, losersData, activeData] = await Promise.all([
 				fetchWithProxy(gainersUrl).catch(() => null),
 				fetchWithProxy(losersUrl).catch(() => null),
 				fetchWithProxy(activeUrl).catch(() => null)
 			]);
-			
+
 			// Parse results
 			const parseScreenerResult = (data) => {
 				if (!data?.finance?.result?.[0]?.quotes) return [];
@@ -2516,16 +2517,16 @@ export class MarketOverview extends HTMLElement {
 					prevClose: q.regularMarketPreviousClose
 				}));
 			};
-			
+
 			this.topPerformers = {
 				gainers: parseScreenerResult(gainersData),
 				losers: parseScreenerResult(losersData),
 				active: parseScreenerResult(activeData)
 			};
-			
+
 			// Render ticker content
 			this.renderTickerContent();
-			
+
 		} catch (error) {
 			console.error('[Top Performers] Error loading data:', error);
 			if (tickerContent) {
@@ -2533,15 +2534,15 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	renderTickerContent() {
 		const tickerContent = this.shadowRoot.getElementById('ticker-content');
 		if (!tickerContent) return;
-		
+
 		// Combine top gainers and losers for the ticker
 		const gainers = this.topPerformers.gainers?.slice(0, 10) || [];
 		const losers = this.topPerformers.losers?.slice(0, 10) || [];
-		
+
 		// Interleave gainers and losers
 		const combined = [];
 		const maxLen = Math.max(gainers.length, losers.length);
@@ -2549,12 +2550,12 @@ export class MarketOverview extends HTMLElement {
 			if (gainers[i]) combined.push({ ...gainers[i], type: 'gainer' });
 			if (losers[i]) combined.push({ ...losers[i], type: 'loser' });
 		}
-		
+
 		if (combined.length === 0) {
 			tickerContent.innerHTML = '<span class="ticker-loading">No data available</span>';
 			return;
 		}
-		
+
 		// Create ticker items (duplicate for infinite scroll)
 		const createItems = (items) => items.map(item => `
 			<div class="ticker-item">
@@ -2565,22 +2566,22 @@ export class MarketOverview extends HTMLElement {
 				</span>
 			</div>
 		`).join('');
-		
+
 		// Duplicate content for seamless infinite scroll
 		tickerContent.innerHTML = createItems(combined) + createItems(combined);
 	}
-	
+
 	async renderPerformersModal(type = 'gainers') {
 		const grid = this.shadowRoot.getElementById('performers-grid');
 		if (!grid) return;
-		
+
 		const performers = this.topPerformers[type] || [];
-		
+
 		if (performers.length === 0) {
 			grid.innerHTML = '<div class="performers-loading">No data available</div>';
 			return;
 		}
-		
+
 		// Render performer cards
 		grid.innerHTML = performers.map(p => `
 			<div class="performer-card ${type === 'losers' ? 'loser' : 'gainer'}" data-symbol="${p.symbol}">
@@ -2623,7 +2624,7 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`).join('');
-		
+
 		// Add click handlers to cards
 		grid.querySelectorAll('.performer-card').forEach(card => {
 			card.addEventListener('click', () => {
@@ -2637,25 +2638,25 @@ export class MarketOverview extends HTMLElement {
 				}
 			});
 		});
-		
+
 		// Load mini charts for each performer
 		this.loadPerformerCharts(performers);
 	}
-	
+
 	async loadPerformerCharts(performers) {
 		const { fetchWithProxy } = await import('../utils/proxy.js');
-		
+
 		for (const p of performers.slice(0, 12)) { // Limit to first 12 for performance
 			try {
 				const url = `https://query1.finance.yahoo.com/v8/finance/chart/${p.symbol}?interval=5m&range=1d`;
 				const data = await fetchWithProxy(url);
-				
+
 				if (data?.chart?.result?.[0]) {
 					const result = data.chart.result[0];
 					const quotes = result.indicators?.quote?.[0];
 					const closes = quotes?.close || [];
 					const validCloses = closes.filter(c => c !== null);
-					
+
 					if (validCloses.length > 0) {
 						const canvasId = `performer-chart-${p.symbol.replace(/[^a-zA-Z0-9]/g, '')}`;
 						const canvas = this.shadowRoot.getElementById(canvasId);
@@ -2669,63 +2670,63 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	renderPerformerMiniChart(canvas, data, isPositive) {
 		if (!canvas || !data || data.length === 0) return;
-		
+
 		const ctx = canvas.getContext('2d');
 		const dpr = window.devicePixelRatio || 1;
-		
+
 		canvas.width = 120 * dpr;
 		canvas.height = 60 * dpr;
 		canvas.style.width = '120px';
 		canvas.style.height = '60px';
-		
+
 		ctx.scale(dpr, dpr);
-		
+
 		const width = 120;
 		const height = 60;
 		const padding = 4;
-		
+
 		const min = Math.min(...data);
 		const max = Math.max(...data);
 		const range = max - min || 1;
-		
+
 		ctx.clearRect(0, 0, width, height);
-		
+
 		// Draw area
 		const color = isPositive ? '#10b981' : '#ef4444';
 		const bgColor = isPositive ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
-		
+
 		ctx.fillStyle = bgColor;
 		ctx.beginPath();
 		ctx.moveTo(padding, height - padding);
-		
+
 		data.forEach((value, i) => {
 			const x = padding + (i / (data.length - 1)) * (width - 2 * padding);
 			const y = padding + (1 - (value - min) / range) * (height - 2 * padding);
 			ctx.lineTo(x, y);
 		});
-		
+
 		ctx.lineTo(width - padding, height - padding);
 		ctx.closePath();
 		ctx.fill();
-		
+
 		// Draw line
 		ctx.strokeStyle = color;
 		ctx.lineWidth = 1.5;
 		ctx.beginPath();
-		
+
 		data.forEach((value, i) => {
 			const x = padding + (i / (data.length - 1)) * (width - 2 * padding);
 			const y = padding + (1 - (value - min) / range) * (height - 2 * padding);
 			if (i === 0) ctx.moveTo(x, y);
 			else ctx.lineTo(x, y);
 		});
-		
+
 		ctx.stroke();
 	}
-	
+
 	formatVolume(volume) {
 		if (!volume) return 'N/A';
 		if (volume >= 1e9) return (volume / 1e9).toFixed(1) + 'B';
@@ -2733,142 +2734,142 @@ export class MarketOverview extends HTMLElement {
 		if (volume >= 1e3) return (volume / 1e3).toFixed(1) + 'K';
 		return volume.toString();
 	}
-	
+
 	setupThemeToggle() {
 		const toggle = this.shadowRoot.getElementById('theme-toggle');
 		if (!toggle) return;
-		
+
 		// Check saved preference
 		const savedTheme = localStorage.getItem('theme') || 'dark';
 		if (savedTheme === 'light') {
 			this.applyLightMode(true);
 		}
-		
+
 		toggle.addEventListener('click', () => {
 			const isLight = this.classList.contains('light-mode');
 			this.applyLightMode(!isLight);
 		});
-		
+
 		// Setup AI Summary Button
 		this.setupAISummaryButton();
-		
+
 		// Setup Overview Info Icons
 		this.setupOverviewInfoIcons();
 	}
-	
+
 	applyLightMode(enable) {
 		const toggle = this.shadowRoot.getElementById('theme-toggle');
 		const thumb = toggle?.querySelector('.theme-switch-thumb');
 		const icon = toggle?.querySelector('.theme-icon');
-		
-	if (enable) {
-		this.classList.add('light-mode');
-		toggle?.classList.add('light');
-		if (icon) icon.textContent = '☀️';
-		localStorage.setItem('theme', 'light');
-		// Also update body for global elements
-		document.body.style.background = '#f8fafc';
-	} else {
-		this.classList.remove('light-mode');
-		toggle?.classList.remove('light');
-		if (icon) icon.textContent = '🌙';
-		localStorage.setItem('theme', 'dark');
-		document.body.style.background = '#0b0f14';
+
+		if (enable) {
+			this.classList.add('light-mode');
+			toggle?.classList.add('light');
+			if (icon) icon.textContent = '☀️';
+			localStorage.setItem('theme', 'light');
+			// Also update body for global elements
+			document.body.style.background = '#f8fafc';
+		} else {
+			this.classList.remove('light-mode');
+			toggle?.classList.remove('light');
+			if (icon) icon.textContent = '🌙';
+			localStorage.setItem('theme', 'dark');
+			document.body.style.background = '#0b0f14';
+		}
+
+		// Dispatch theme change event for chart components
+		window.dispatchEvent(new CustomEvent('themechange'));
+
+		// Re-render all mini charts with new theme colors
+		this.rerenderAllMiniCharts();
 	}
-	
-	// Dispatch theme change event for chart components
-	window.dispatchEvent(new CustomEvent('themechange'));
-	
-	// Re-render all mini charts with new theme colors
-	this.rerenderAllMiniCharts();
-	}
-	
+
 	setupTimeRangeSelector() {
 		const timeRangeContainer = this.shadowRoot.getElementById('global-time-range');
 		if (!timeRangeContainer) return;
-		
+
 		const buttons = timeRangeContainer.querySelectorAll('.time-range-btn');
 		buttons.forEach(btn => {
 			btn.addEventListener('click', async (e) => {
 				const newRange = e.target.dataset.range;
 				if (newRange === this.selectedTimeRange) return;
-				
+
 				// Update active state
 				buttons.forEach(b => b.classList.remove('active'));
 				e.target.classList.add('active');
-				
+
 				this.selectedTimeRange = newRange;
-				
+
 				// Reload data with new time range
 				await this.loadMarketData();
 			});
 		});
 	}
-	
+
 	setupFeaturesMenu() {
 		const watchlistItem = this.shadowRoot.getElementById('menu-watchlist');
 		const comparisonItem = this.shadowRoot.getElementById('menu-comparison');
 		const backtestingItem = this.shadowRoot.getElementById('menu-backtesting');
 		const backtestingProItem = this.shadowRoot.getElementById('menu-backtesting-pro');
 		const portfolioItem = this.shadowRoot.getElementById('menu-portfolio');
-		
+
 		// Navigate to watchlist
 		watchlistItem?.addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'watchlist' } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'watchlist' }
 			}));
 		});
-		
+
 		// Navigate to comparison
 		comparisonItem?.addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'stock-comparison' } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'stock-comparison' }
 			}));
 		});
-		
+
 		// Navigate to backtesting
 		backtestingItem?.addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'backtesting' } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'backtesting' }
 			}));
 		});
-		
+
 		// Navigate to backtesting pro
 		backtestingProItem?.addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'backtesting-pro' } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'backtesting-pro' }
 			}));
 		});
-		
+
 		// Navigate to portfolio
 		portfolioItem?.addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'portfolio-tracking' } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'portfolio-tracking' }
 			}));
 		});
-		
+
 		// Navigate to economic calendar
 		const economicCalendarItem = this.shadowRoot.getElementById('menu-economic-calendar');
 		economicCalendarItem?.addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'economic-calendar' } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'economic-calendar' }
 			}));
 		});
 	}
-	
+
 	setupSearchAutocomplete() {
 		const searchInput = this.shadowRoot.getElementById('stock-search-input');
 		const searchSubmitBtn = this.shadowRoot.getElementById('search-submit-btn');
 		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
-		
+
 		if (!searchInput || !dropdown) return;
-		
+
 		// Store valid symbols from autocomplete suggestions
 		this.validSymbols = new Set();
-		
+
 		let debounceTimer = null;
 		let selectedIndex = -1;
-		
+
 		// Handle search submission
 		// Helper function to check if input looks like a ticker symbol
 		const looksLikeTicker = (input) => {
@@ -2884,28 +2885,28 @@ export class MarketOverview extends HTMLElement {
 
 		const handleSearch = (symbol, skipValidation = false) => {
 			if (!symbol) return;
-			
+
 			const symbolUpper = symbol.toUpperCase().trim();
-			
+
 			// Allow direct ticker input without validation if it looks like a ticker
 			const isTickerFormat = looksLikeTicker(symbolUpper);
-			
+
 			// Validate that symbol exists in autocomplete suggestions (unless skipValidation is true or it's a ticker format)
 			if (!skipValidation && !isTickerFormat && !this.validSymbols.has(symbolUpper)) {
 				alert(`Please select a valid stock from the suggestions or enter a stock ticker symbol (e.g., AAPL, MSFT). "${symbol}" is not recognized.`);
 				return;
 			}
-			
+
 			// Save to recent searches
 			this.saveRecentSearch(symbolUpper);
-			
+
 			this.hideSearchAutocomplete();
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { page: 'stock-analysis', symbol: symbolUpper } 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: { page: 'stock-analysis', symbol: symbolUpper }
 			}));
 			searchInput.value = '';
 		};
-		
+
 		// Submit button click
 		searchSubmitBtn?.addEventListener('click', () => {
 			const symbol = searchInput?.value.trim().toUpperCase();
@@ -2915,7 +2916,7 @@ export class MarketOverview extends HTMLElement {
 				alert('Please enter a stock ticker symbol (e.g., AAPL, MSFT) or select a stock from the suggestions.');
 			}
 		});
-		
+
 		// Show recent searches on focus or click (if input is empty)
 		const showRecentIfEmpty = () => {
 			const query = searchInput.value.trim();
@@ -2924,35 +2925,35 @@ export class MarketOverview extends HTMLElement {
 				this.showRecentSearches();
 			}
 		};
-		
+
 		searchInput.addEventListener('focus', showRecentIfEmpty);
 		searchInput.addEventListener('click', showRecentIfEmpty);
-		
+
 		// Input event for typing
 		searchInput.addEventListener('input', (e) => {
 			const query = e.target.value.trim();
-			
+
 			if (debounceTimer) clearTimeout(debounceTimer);
 			selectedIndex = -1;
-			
+
 			if (query.length < 1) {
 				// Show recent searches if input is empty
 				this.showRecentSearches();
 				return;
 			}
-			
+
 			dropdown.innerHTML = '<div class="autocomplete-loading">Searching...</div>';
 			dropdown.classList.add('show');
-			
+
 			debounceTimer = setTimeout(() => {
 				this.searchStockSymbols(query);
 			}, 150); // Reduced from 300ms to 150ms for faster response
 		});
-		
+
 		// Keyboard navigation
 		searchInput.addEventListener('keydown', (e) => {
 			const items = dropdown.querySelectorAll('.autocomplete-item, .recent-search-item');
-			
+
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
 				if (items.length > 0) {
@@ -2985,7 +2986,7 @@ export class MarketOverview extends HTMLElement {
 				this.hideSearchAutocomplete();
 			}
 		});
-		
+
 		// Close dropdown when clicking outside
 		this.shadowRoot.addEventListener('click', (e) => {
 			const searchBox = this.shadowRoot.querySelector('.search-box');
@@ -2994,19 +2995,19 @@ export class MarketOverview extends HTMLElement {
 			}
 		});
 	}
-	
+
 	async searchStockSymbols(query) {
 		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
 		if (!dropdown) return;
-		
+
 		// Abort previous search request if it exists
 		if (this.searchController) {
 			this.searchController.abort();
 		}
-		
+
 		// Set current search query to track which request should update the UI
 		this.currentSearchQuery = query;
-		
+
 		// Check frontend cache first for instant results
 		const cacheKey = `search_${query.toLowerCase()}`;
 		const cached = sessionStorage.getItem(cacheKey);
@@ -3030,11 +3031,11 @@ export class MarketOverview extends HTMLElement {
 				// Cache invalid, continue with API call
 			}
 		}
-		
+
 		try {
 			console.log('[Search] Fetching:', `${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`);
 			const startTime = Date.now();
-			
+
 			// Create new abort controller for this request
 			this.searchController = new AbortController();
 			const timeoutId = setTimeout(() => {
@@ -3042,21 +3043,21 @@ export class MarketOverview extends HTMLElement {
 					this.searchController.abort();
 				}
 			}, 5000); // 5 second timeout
-			
+
 			const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`, {
 				signal: this.searchController.signal
 			});
 			clearTimeout(timeoutId);
-			
+
 			// Check if this is still the current query (avoid race conditions)
 			if (this.currentSearchQuery !== query) {
 				console.log('[Search] Query changed, ignoring response for:', query);
 				return;
 			}
-			
+
 			const fetchTime = Date.now() - startTime;
 			console.log('[Search] Response status:', response.status, `(${fetchTime}ms)`);
-			
+
 			if (!response.ok) {
 				console.error('[Search] Server error:', response.status, response.statusText);
 				if (this.currentSearchQuery === query) {
@@ -3064,17 +3065,17 @@ export class MarketOverview extends HTMLElement {
 				}
 				return;
 			}
-			
+
 			const data = await response.json();
 			console.log('[Search] Results:', data);
 			const results = data.results || [];
-			
+
 			// Check again if this is still the current query
 			if (this.currentSearchQuery !== query) {
 				console.log('[Search] Query changed after fetch, ignoring results for:', query);
 				return;
 			}
-			
+
 			// Cache results in sessionStorage
 			try {
 				sessionStorage.setItem(cacheKey, JSON.stringify({
@@ -3084,7 +3085,7 @@ export class MarketOverview extends HTMLElement {
 			} catch (e) {
 				// Ignore storage errors (quota exceeded, etc.)
 			}
-			
+
 			if (results.length === 0) {
 				if (this.currentSearchQuery === query) {
 					dropdown.innerHTML = '<div class="autocomplete-empty">No results found - try a different term</div>';
@@ -3093,26 +3094,26 @@ export class MarketOverview extends HTMLElement {
 				}
 				return;
 			}
-			
+
 			// Final check before rendering
 			if (this.currentSearchQuery === query) {
 				this.renderSearchResults(results, dropdown);
 				// Load data scores asynchronously (non-blocking)
 				this.loadDataScores(results.map(r => r.symbol));
 			}
-			
+
 		} catch (error) {
 			// Silently ignore AbortError (expected when request is cancelled)
 			if (error.name === 'AbortError') {
 				console.log('[Search] Request aborted for:', query);
 				return;
 			}
-			
+
 			// Only show error if this is still the current query
 			if (this.currentSearchQuery !== query) {
 				return;
 			}
-			
+
 			console.error('[Autocomplete] Error:', error);
 			// Check if it's a network error (server not running)
 			if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -3127,7 +3128,7 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	updateSearchSelection(items, selectedIndex) {
 		items.forEach((item, i) => {
 			item.classList.toggle('selected', i === selectedIndex);
@@ -3136,7 +3137,7 @@ export class MarketOverview extends HTMLElement {
 			items[selectedIndex].scrollIntoView({ block: 'nearest' });
 		}
 	}
-	
+
 	hideSearchAutocomplete() {
 		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
 		if (dropdown) {
@@ -3144,7 +3145,7 @@ export class MarketOverview extends HTMLElement {
 			dropdown.innerHTML = '';
 		}
 	}
-	
+
 	// Recent searches functionality
 	getRecentSearches() {
 		try {
@@ -3157,7 +3158,7 @@ export class MarketOverview extends HTMLElement {
 		}
 		return [];
 	}
-	
+
 	saveRecentSearch(symbol) {
 		try {
 			let recent = this.getRecentSearches();
@@ -3173,30 +3174,30 @@ export class MarketOverview extends HTMLElement {
 			console.error('[Recent Searches] Error saving:', error);
 		}
 	}
-	
+
 	async showRecentSearches() {
 		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
 		if (!dropdown) {
 			console.log('[Recent Searches] Dropdown not found');
 			return;
 		}
-		
+
 		const recent = this.getRecentSearches();
 		console.log('[Recent Searches] Found', recent.length, 'recent searches:', recent);
-		
+
 		if (recent.length === 0) {
 			console.log('[Recent Searches] No recent searches found');
 			dropdown.classList.remove('show');
 			return;
 		}
-		
+
 		// Show recent searches immediately with symbols (fast)
 		const recentItems = recent.slice(0, 10).map(item => ({
 			...item,
 			name: item.symbol, // Default to symbol, will be updated if API call succeeds
 			type: 'Stock'
 		}));
-		
+
 		dropdown.innerHTML = `
 			<div class="recent-searches-header">Recent Searches</div>
 			${recentItems.map((item) => `
@@ -3207,9 +3208,9 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			`).join('')}
 		`;
-		
+
 		dropdown.classList.add('show');
-		
+
 		// Add click handlers for recent searches
 		dropdown.querySelectorAll('.recent-search-item').forEach(item => {
 			item.addEventListener('click', (e) => {
@@ -3222,14 +3223,14 @@ export class MarketOverview extends HTMLElement {
 				this.saveRecentSearch(symbol);
 				// Navigate directly
 				this.hideSearchAutocomplete();
-				window.dispatchEvent(new CustomEvent('navigate', { 
-					detail: { page: 'stock-analysis', symbol: symbol.toUpperCase() } 
+				window.dispatchEvent(new CustomEvent('navigate', {
+					detail: { page: 'stock-analysis', symbol: symbol.toUpperCase() }
 				}));
 				const searchInput = this.shadowRoot.getElementById('stock-search-input');
 				if (searchInput) searchInput.value = '';
 			});
 		});
-		
+
 		// Try to fetch names asynchronously (non-blocking)
 		recentItems.forEach(async (item) => {
 			try {
@@ -3250,24 +3251,24 @@ export class MarketOverview extends HTMLElement {
 			}
 		});
 	}
-	
+
 	renderDataScore(score, maxScore = 1) {
 		const isComplete = score >= 1;
-		const dot = isComplete 
-			? '<span class="score-dot filled"></span>' 
+		const dot = isComplete
+			? '<span class="score-dot filled"></span>'
 			: '<span class="score-dot"></span>';
 		const label = isComplete ? 'Complete Data' : 'Incomplete Data';
 		const labelColor = isComplete ? '#22c55e' : '#ef4444';
 		return `<span class="score-label" style="color: ${labelColor};">${label}</span>${dot}`;
 	}
-	
+
 	renderSearchResults(results, dropdown) {
 		// Store valid symbols
 		this.validSymbols.clear();
 		results.forEach(item => {
 			this.validSymbols.add(item.symbol.toUpperCase());
 		});
-		
+
 		dropdown.innerHTML = results.map((item, index) => `
 			<div class="autocomplete-item" data-symbol="${item.symbol}" data-index="${index}">
 				<span class="autocomplete-symbol">${item.symbol}</span>
@@ -3278,7 +3279,7 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`).join('');
-		
+
 		// Add click handlers
 		dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
 			item.addEventListener('click', () => {
@@ -3287,33 +3288,33 @@ export class MarketOverview extends HTMLElement {
 				// Save to recent searches
 				this.saveRecentSearch(symbol);
 				this.hideSearchAutocomplete();
-				window.dispatchEvent(new CustomEvent('navigate', { 
-					detail: { page: 'stock-analysis', symbol: symbol } 
+				window.dispatchEvent(new CustomEvent('navigate', {
+					detail: { page: 'stock-analysis', symbol: symbol }
 				}));
 				const searchInput = this.shadowRoot.getElementById('stock-search-input');
 				if (searchInput) searchInput.value = '';
 			});
 		});
 	}
-	
+
 	async loadDataScores(symbols) {
 		if (!symbols || symbols.length === 0) return;
-		
+
 		try {
 			// Use a shorter timeout for score loading (non-critical)
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-			
+
 			const response = await fetch(`${API_BASE_URL}/api/check-data?symbols=${symbols.join(',')}`, {
 				signal: controller.signal
 			});
 			clearTimeout(timeoutId);
-			
+
 			if (!response.ok) return;
-			
+
 			const data = await response.json();
 			const scores = data.scores || {};
-			
+
 			// Update the score displays
 			for (const symbol of symbols) {
 				const scoreData = scores[symbol];
@@ -3324,7 +3325,7 @@ export class MarketOverview extends HTMLElement {
 					}
 				}
 			}
-			
+
 			// Re-sort items by score (only if dropdown still exists and is visible)
 			const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
 			if (dropdown && dropdown.classList.contains('show')) {
@@ -3351,7 +3352,7 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	getTimeRangeParams(timeRange) {
 		// Returns { range: string, interval: string, daysBack: number } for Yahoo Finance API
 		const params = {
@@ -3364,17 +3365,17 @@ export class MarketOverview extends HTMLElement {
 		};
 		return params[timeRange] || params['1D'];
 	}
-	
+
 	calculateChangeForTimeRange(data, timeRange) {
 		// Calculate change based on the selected time range
 		if (!data || !data.chartData || data.chartData.length === 0) {
 			return { change: 0, changePercent: 0 };
 		}
-		
+
 		const chartData = data.chartData;
 		const currentPrice = data.currentPrice;
 		let startPrice = chartData[0]?.value || currentPrice;
-		
+
 		if (timeRange === 'YTD') {
 			// For YTD, find the price at the start of the year
 			const currentYear = new Date().getFullYear();
@@ -3382,13 +3383,13 @@ export class MarketOverview extends HTMLElement {
 			const yearStartData = chartData.find(d => d.time >= yearStart);
 			startPrice = yearStartData?.value || chartData[0]?.value || currentPrice;
 		}
-		
+
 		const change = currentPrice - startPrice;
 		const changePercent = startPrice !== 0 ? (change / startPrice) * 100 : 0;
-		
+
 		return { change, changePercent };
 	}
-	
+
 	getChartTitle() {
 		// Returns a human-readable chart title based on the selected time range
 		const titles = {
@@ -3401,7 +3402,7 @@ export class MarketOverview extends HTMLElement {
 		};
 		return titles[this.selectedTimeRange] || 'Last 3 Months';
 	}
-	
+
 	async loadMarketData() {
 		// Major Indices - with fallback symbols
 		const indices = [
@@ -3411,7 +3412,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: '^NDX', name: 'NASDAQ 100', fallback: null },
 			{ symbol: '^HSI', name: 'Hang Seng', fallback: 'HSI' }
 		];
-		
+
 		// Macro Risk Indicators
 		// Some use Yahoo Finance, others use FRED API
 		const macroIndicators = [
@@ -3427,41 +3428,41 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: 'DX-Y.NYB', name: 'Dollar Index', description: 'USD Strength', source: 'yahoo', fallback: 'DX=F' },
 			{ symbol: 'GC=F', name: 'Gold', description: 'Safe Haven Asset', source: 'yahoo', fallback: 'GC' }
 		];
-		
+
 		// Currencies
 		const currencies = [
 			{ symbol: 'EURUSD=X', name: 'USD/EUR', fallback: null },
 			{ symbol: 'GBPUSD=X', name: 'USD/GBP', fallback: null },
 			{ symbol: 'JPY=X', name: 'USD/JPY', fallback: null }
 		];
-		
+
 		// Commodities
 		const commodities = [
 			{ symbol: 'GC=F', name: 'Gold', fallback: 'GC' },
 			{ symbol: 'SI=F', name: 'Silver', fallback: 'SI' },
 			{ symbol: 'CL=F', name: 'WTI Crude Oil', fallback: 'CL' }
 		];
-		
+
 		const indicesGrid = this.shadowRoot.getElementById('indices-grid');
 		const macroGrid = this.shadowRoot.getElementById('macro-grid');
 		const currenciesGrid = this.shadowRoot.getElementById('currencies-grid');
 		const commoditiesGrid = this.shadowRoot.getElementById('commodities-grid');
-		
+
 		// Don't clear grids yet - keep old data visible during loading
 		// Grids will be cleared only after new data is ready
-		
+
 		// Show loading overlay
 		const loadingOverlay = this.shadowRoot.getElementById('loading-overlay');
 		const progressBar = this.shadowRoot.getElementById('progress-bar');
 		if (loadingOverlay) {
 			loadingOverlay.classList.remove('hidden');
 		}
-		
+
 		// Simulate progress (we'll update this as data loads)
 		let progress = 0;
 		const totalItems = indices.length + macroIndicators.length + currencies.length + commodities.length;
 		let loadedItems = 0;
-		
+
 		const updateProgress = () => {
 			loadedItems++;
 			progress = Math.min(95, (loadedItems / totalItems) * 100);
@@ -3469,7 +3470,7 @@ export class MarketOverview extends HTMLElement {
 				progressBar.style.width = progress + '%';
 			}
 		};
-		
+
 		// Load indices in parallel - fetch current and historical data in parallel for each index
 		// Add small delay to avoid rate limiting (stagger requests slightly)
 		const indexPromises = indices.map(async (index, idx) => {
@@ -3480,7 +3481,7 @@ export class MarketOverview extends HTMLElement {
 			try {
 				let data, historical;
 				let symbol = index.symbol;
-				
+
 				try {
 					// Fetch current and historical data in parallel
 					[data, historical] = await Promise.all([
@@ -3500,7 +3501,7 @@ export class MarketOverview extends HTMLElement {
 						throw error;
 					}
 				}
-				
+
 				const indication = this.calculateHistoricalIndication(data.currentPrice, historical);
 				updateProgress();
 				return { success: true, index, data, indication };
@@ -3510,7 +3511,7 @@ export class MarketOverview extends HTMLElement {
 				return { success: false, index, error };
 			}
 		});
-		
+
 		// Load macro indicators in parallel - fetch current and historical data in parallel
 		// Add small delay to avoid rate limiting (stagger requests slightly)
 		const macroPromises = macroIndicators.map(async (indicator, idx) => {
@@ -3521,7 +3522,7 @@ export class MarketOverview extends HTMLElement {
 			try {
 				let data, historical;
 				let symbol = indicator.symbol;
-				
+
 				if (indicator.source === 'fred') {
 					// FRED data - fetch in parallel
 					[data, historical] = await Promise.all([
@@ -3549,7 +3550,7 @@ export class MarketOverview extends HTMLElement {
 						}
 					}
 				}
-				
+
 				const indication = this.calculateHistoricalIndication(data.currentPrice, historical);
 				updateProgress();
 				return { success: true, indicator, data, indication };
@@ -3559,7 +3560,7 @@ export class MarketOverview extends HTMLElement {
 				return { success: false, indicator, error };
 			}
 		});
-		
+
 		// Load currencies in parallel
 		const currencyPromises = currencies.map(async (currency, idx) => {
 			if (idx > 0) {
@@ -3568,7 +3569,7 @@ export class MarketOverview extends HTMLElement {
 			try {
 				let data, historical;
 				let symbol = currency.symbol;
-				
+
 				try {
 					[data, historical] = await Promise.all([
 						this.fetchIndexData(symbol),
@@ -3586,7 +3587,7 @@ export class MarketOverview extends HTMLElement {
 						throw error;
 					}
 				}
-				
+
 				const indication = this.calculateHistoricalIndication(data.currentPrice, historical);
 				updateProgress();
 				return { success: true, currency, data, indication };
@@ -3596,7 +3597,7 @@ export class MarketOverview extends HTMLElement {
 				return { success: false, currency, error };
 			}
 		});
-		
+
 		// Load commodities in parallel
 		const commodityPromises = commodities.map(async (commodity, idx) => {
 			if (idx > 0) {
@@ -3605,7 +3606,7 @@ export class MarketOverview extends HTMLElement {
 			try {
 				let data, historical;
 				let symbol = commodity.symbol;
-				
+
 				try {
 					[data, historical] = await Promise.all([
 						this.fetchIndexData(symbol),
@@ -3623,7 +3624,7 @@ export class MarketOverview extends HTMLElement {
 						throw error;
 					}
 				}
-				
+
 				const indication = this.calculateHistoricalIndication(data.currentPrice, historical);
 				updateProgress();
 				return { success: true, commodity, data, indication };
@@ -3633,7 +3634,7 @@ export class MarketOverview extends HTMLElement {
 				return { success: false, commodity, error };
 			}
 		});
-		
+
 		// Wait for all promises to complete in parallel
 		const [indexResults, macroResults, currencyResults, commodityResults] = await Promise.all([
 			Promise.all(indexPromises),
@@ -3641,16 +3642,16 @@ export class MarketOverview extends HTMLElement {
 			Promise.all(currencyPromises),
 			Promise.all(commodityPromises)
 		]);
-		
+
 		// Clear grids only after new data is ready to replace old data
 		indicesGrid.innerHTML = '';
 		macroGrid.innerHTML = '';
 		currenciesGrid.innerHTML = '';
 		commoditiesGrid.innerHTML = '';
-		
+
 		// Render global overview panel
 		this.renderGlobalOverview(indexResults);
-		
+
 		// Render indices
 		indexResults.forEach((result, idx) => {
 			if (result.success) {
@@ -3665,7 +3666,7 @@ export class MarketOverview extends HTMLElement {
 
 		// Render macro overview panel
 		this.renderMacroOverview(macroResults);
-		
+
 		// Render macro indicators
 		macroResults.forEach((result, idx) => {
 			if (result.success) {
@@ -3680,7 +3681,7 @@ export class MarketOverview extends HTMLElement {
 
 		// Render currencies overview panel
 		this.renderCurrenciesOverview(currencyResults, commodityResults);
-		
+
 		// Render currencies
 		currencyResults.forEach((result, idx) => {
 			if (result.success) {
@@ -3704,7 +3705,7 @@ export class MarketOverview extends HTMLElement {
 				commoditiesGrid.appendChild(card);
 			}
 		});
-		
+
 		// Hide loading overlay
 		if (progressBar) {
 			progressBar.style.width = '100%';
@@ -3720,7 +3721,7 @@ export class MarketOverview extends HTMLElement {
 			}
 		}, 200);
 	}
-	
+
 	renderGlobalOverview(indexResults) {
 		const panel = this.shadowRoot.getElementById('global-overview-panel');
 		const contentContainer = this.shadowRoot.getElementById('global-overview-content');
@@ -3728,16 +3729,16 @@ export class MarketOverview extends HTMLElement {
 			console.error('[Global Overview] Panel or content container not found');
 			return;
 		}
-		
+
 		console.log('[Global Overview] Rendering with results:', indexResults);
 		const successfulIndices = indexResults.filter(r => r.success);
 		console.log('[Global Overview] Successful indices:', successfulIndices.length);
-		
+
 		if (successfulIndices.length === 0) {
 			contentContainer.innerHTML = '<div class="loading">No data available</div>';
 			return;
 		}
-		
+
 		// Map indices to flags and regions
 		const indexMap = {
 			'S&P 500': { flag: '🇺🇸', region: 'North America' },
@@ -3746,28 +3747,28 @@ export class MarketOverview extends HTMLElement {
 			'NASDAQ 100': { flag: '🇺🇸', region: 'North America' },
 			'Hang Seng': { flag: '🇭🇰', region: 'Asia' }
 		};
-		
+
 		// Calculate summary statistics
 		let totalPositive = 0;
 		let totalNegative = 0;
 		let totalNeutral = 0;
 		let avgChange = 0;
 		let validChanges = 0;
-		
+
 		successfulIndices.forEach(result => {
 			const change = result.data?.changePercent || 0;
 			if (change > 0) totalPositive++;
 			else if (change < 0) totalNegative++;
 			else totalNeutral++;
-			
+
 			if (change !== 0) {
 				avgChange += change;
 				validChanges++;
 			}
 		});
-		
+
 		avgChange = validChanges > 0 ? avgChange / validChanges : 0;
-		
+
 		// Get the original indices array to get symbols
 		const indices = [
 			{ symbol: '^GSPC', name: 'S&P 500' },
@@ -3776,24 +3777,24 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: '^NDX', name: 'NASDAQ 100' },
 			{ symbol: '^HSI', name: 'Hang Seng' }
 		];
-		
+
 		// Determine panel color based on majority
 		const panelColorClass = totalPositive > totalNegative ? 'majority-positive' : totalNegative > totalPositive ? 'majority-negative' : 'risk-neutral';
-		
+
 		// Render global overview (only update content container, not the entire panel)
 		contentContainer.innerHTML = `
 			<div class="global-indices-grid">
 				${successfulIndices.map((result, idx) => {
-					const originalIndex = indices.find(i => i.name === result.index.name) || indices[idx];
-					const indexInfo = indexMap[result.index.name] || { flag: '📊', region: 'Global' };
-					const change = result.data?.changePercent || 0;
-					const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
-					const changeSign = change > 0 ? '+' : '';
-					const price = result.data?.currentPrice || 0;
-					const symbol = originalIndex?.symbol || result.index.symbol || '';
-					const displayName = result.index.name;
-					
-					return `
+			const originalIndex = indices.find(i => i.name === result.index.name) || indices[idx];
+			const indexInfo = indexMap[result.index.name] || { flag: '📊', region: 'Global' };
+			const change = result.data?.changePercent || 0;
+			const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+			const changeSign = change > 0 ? '+' : '';
+			const price = result.data?.currentPrice || 0;
+			const symbol = originalIndex?.symbol || result.index.symbol || '';
+			const displayName = result.index.name;
+
+			return `
 						<div class="global-index-item ${changeClass}" data-symbol="${symbol}">
 							<div class="global-index-name">${displayName}</div>
 							<div class="global-index-price">${this.formatPrice(price)}</div>
@@ -3802,7 +3803,7 @@ export class MarketOverview extends HTMLElement {
 							</div>
 						</div>
 					`;
-				}).join('')}
+		}).join('')}
 			</div>
 			<div class="global-summary">
 				<div class="global-summary-item">
@@ -3821,10 +3822,10 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Set panel color based on majority
 		panel.className = `global-overview-panel ${panelColorClass}`;
-		
+
 		// Add click handlers to navigate to detail pages
 		panel.querySelectorAll('.global-index-item').forEach(item => {
 			item.addEventListener('click', () => {
@@ -3838,66 +3839,66 @@ export class MarketOverview extends HTMLElement {
 			});
 		});
 	}
-	
+
 	renderCurrenciesOverview(currencyResults, commodityResults) {
 		const panel = this.shadowRoot.getElementById('currencies-overview-panel');
 		if (!panel) {
 			console.error('[Currencies Overview] Panel not found');
 			return;
 		}
-		
+
 		const successfulCurrencies = currencyResults.filter(r => r.success);
-		
+
 		if (successfulCurrencies.length === 0) {
 			panel.innerHTML = '<div class="loading">No data available</div>';
 			return;
 		}
-		
+
 		// Map currencies to icons
 		const itemMap = {
 			'USD/EUR': { icon: '💶', category: 'Currency' },
 			'USD/GBP': { icon: '💷', category: 'Currency' },
 			'USD/JPY': { icon: '💴', category: 'Currency' }
 		};
-		
+
 		// Calculate summary statistics
 		let totalPositive = 0;
 		let totalNegative = 0;
 		let totalNeutral = 0;
 		let avgChange = 0;
 		let validChanges = 0;
-		
+
 		successfulCurrencies.forEach(result => {
 			const change = result.data?.changePercent || 0;
 			if (change > 0) totalPositive++;
 			else if (change < 0) totalNegative++;
 			else totalNeutral++;
-			
+
 			if (change !== 0) {
 				avgChange += change;
 				validChanges++;
 			}
 		});
-		
+
 		avgChange = validChanges > 0 ? avgChange / validChanges : 0;
-		
+
 		// Determine panel color based on majority
 		const panelColorClass = totalPositive > totalNegative ? 'majority-positive' : totalNegative > totalPositive ? 'majority-negative' : 'risk-neutral';
-		
+
 		// Render currencies overview
 		panel.innerHTML = `
 			<div class="global-indices-grid">
 				${successfulCurrencies.map((result) => {
-					const itemName = result.currency?.name || '';
-					const itemInfo = itemMap[itemName] || { icon: '📊', category: 'Currency' };
-					const change = result.data?.changePercent || 0;
-					const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
-					const changeSign = change > 0 ? '+' : '';
-					const price = result.data?.currentPrice || 0;
-					const symbol = result.currency?.symbol || '';
-					const displayName = itemName;
-					
-					return `
+			const itemName = result.currency?.name || '';
+			const itemInfo = itemMap[itemName] || { icon: '📊', category: 'Currency' };
+			const change = result.data?.changePercent || 0;
+			const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+			const changeSign = change > 0 ? '+' : '';
+			const price = result.data?.currentPrice || 0;
+			const symbol = result.currency?.symbol || '';
+			const displayName = itemName;
+
+			return `
 						<div class="global-index-item ${changeClass}" data-symbol="${symbol}" data-source="yahoo">
 							<div class="global-index-name">${displayName}</div>
 							<div class="global-index-price">${this.formatCurrencyCommodityPrice(price, itemName)}</div>
@@ -3906,7 +3907,7 @@ export class MarketOverview extends HTMLElement {
 							</div>
 						</div>
 					`;
-				}).join('')}
+		}).join('')}
 			</div>
 			<div class="global-summary">
 				<div class="global-summary-item">
@@ -3925,10 +3926,10 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Set panel color based on majority
 		panel.className = `global-overview-panel ${panelColorClass}`;
-		
+
 		// Add click handlers to navigate to detail pages
 		panel.querySelectorAll('.global-index-item').forEach(item => {
 			item.addEventListener('click', () => {
@@ -3942,11 +3943,11 @@ export class MarketOverview extends HTMLElement {
 			});
 		});
 	}
-	
+
 	formatNumberWithSeparator(num) {
 		return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 	}
-	
+
 	formatCurrencyCommodityPrice(price, name) {
 		// Format currencies (typically 4-5 decimal places)
 		if (name.includes('USD/EUR') || name.includes('USD/GBP') || name.includes('USD/JPY')) {
@@ -3962,40 +3963,40 @@ export class MarketOverview extends HTMLElement {
 		}
 		return this.formatNumberWithSeparator(parseFloat(price.toFixed(2)));
 	}
-	
+
 	renderMacroOverview(macroResults) {
 		const panel = this.shadowRoot.getElementById('macro-overview-panel');
 		if (!panel) {
 			console.error('[Macro Overview] Panel not found');
 			return;
 		}
-		
+
 		const successfulMacros = macroResults.filter(r => r.success);
-		
+
 		if (successfulMacros.length === 0) {
 			panel.innerHTML = '<div class="loading">No data available</div>';
 			return;
 		}
-		
+
 		// Filter to only show the 5 most important indicators: VIX, Gold, Inflation Expectations, Oil, Dollar Index
 		const importantIndicators = ['VIX', 'Gold', '5y5y Inflation Expectations', 'WTI Crude Oil Price', 'Dollar Index'];
 		const filteredMacros = successfulMacros.filter(result => {
 			const name = result.indicator.name;
 			return importantIndicators.some(important => name.includes(important) || important.includes(name));
 		});
-		
+
 		// Calculate summary statistics based on ALL macro indicators (not just filtered ones)
 		// For Macro Risk: Up (increasing risk) is BAD (red), Down (decreasing risk) is GOOD (green)
 		// VIX and Gold are inverse: rising VIX/Gold = bad (red), falling = good (green)
 		let totalBad = 0;  // Increasing risk indicators (red)
 		let totalGood = 0; // Decreasing risk indicators (green)
 		let totalNeutral = 0;
-		
+
 		successfulMacros.forEach(result => {
 			const change = result.data?.changePercent || 0;
 			const name = result.indicator.name;
 			const isInverse = name.includes('VIX') || name.includes('Gold');
-			
+
 			// For inverse indicators: positive change is bad, negative change is good
 			// For normal indicators: positive change is bad (increasing risk), negative change is good
 			if (isInverse) {
@@ -4008,7 +4009,7 @@ export class MarketOverview extends HTMLElement {
 				else totalNeutral++;
 			}
 		});
-		
+
 		// Get the original macro indicators array to get symbols
 		const macroIndicators = [
 			{ symbol: '^VIX', name: 'VIX', source: 'yahoo' },
@@ -4023,7 +4024,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: 'DX-Y.NYB', name: 'Dollar Index', source: 'yahoo' },
 			{ symbol: 'GC=F', name: 'Gold', source: 'yahoo' }
 		];
-		
+
 		// Shorten names for 2-line display
 		const shortenName = (name) => {
 			const shortNames = {
@@ -4035,34 +4036,34 @@ export class MarketOverview extends HTMLElement {
 			};
 			return shortNames[name] || name;
 		};
-		
+
 		// Determine panel color based on majority (more bad = red, more good = green)
 		const panelColorClass = totalBad > totalGood ? 'risk-high' : totalGood > totalBad ? 'risk-low' : 'risk-neutral';
-		
+
 		// Render macro overview - display like Global Market Overview (5 items in a row)
 		panel.innerHTML = `
 			<div class="global-indices-grid">
 				${filteredMacros.map((result, idx) => {
-					const originalMacro = macroIndicators.find(m => m.name === result.indicator.name) || macroIndicators[idx];
-					const change = result.data?.changePercent || 0;
-					const name = result.indicator.name;
-					const isInverse = name.includes('VIX') || name.includes('Gold');
-					
-					// For inverse indicators: positive change = bad (red), negative change = good (green)
-					// For normal indicators: positive change = bad (red), negative change = good (green)
-					let changeClass;
-					if (isInverse) {
-						changeClass = change > 0 ? 'negative' : change < 0 ? 'positive' : 'neutral';
-					} else {
-						changeClass = change > 0 ? 'negative' : change < 0 ? 'positive' : 'neutral';
-					}
-					
-					const changeSign = change > 0 ? '+' : '';
-					const price = result.data?.currentPrice || 0;
-					const symbol = originalMacro?.symbol || '';
-					const displayName = shortenName(result.indicator.name);
-					
-					return `
+			const originalMacro = macroIndicators.find(m => m.name === result.indicator.name) || macroIndicators[idx];
+			const change = result.data?.changePercent || 0;
+			const name = result.indicator.name;
+			const isInverse = name.includes('VIX') || name.includes('Gold');
+
+			// For inverse indicators: positive change = bad (red), negative change = good (green)
+			// For normal indicators: positive change = bad (red), negative change = good (green)
+			let changeClass;
+			if (isInverse) {
+				changeClass = change > 0 ? 'negative' : change < 0 ? 'positive' : 'neutral';
+			} else {
+				changeClass = change > 0 ? 'negative' : change < 0 ? 'positive' : 'neutral';
+			}
+
+			const changeSign = change > 0 ? '+' : '';
+			const price = result.data?.currentPrice || 0;
+			const symbol = originalMacro?.symbol || '';
+			const displayName = shortenName(result.indicator.name);
+
+			return `
 						<div class="global-index-item ${changeClass}" data-symbol="${symbol}" data-source="${originalMacro?.source || 'yahoo'}">
 							<div class="global-index-name">${displayName}</div>
 							<div class="global-index-price">${this.formatMacroPrice(price, result.indicator.name)}</div>
@@ -4071,7 +4072,7 @@ export class MarketOverview extends HTMLElement {
 							</div>
 						</div>
 					`;
-				}).join('')}
+		}).join('')}
 			</div>
 			<div class="global-summary">
 				<div class="global-summary-item">
@@ -4084,10 +4085,10 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Set panel color based on majority
 		panel.className = `global-overview-panel ${panelColorClass}`;
-		
+
 		// Add click handlers to navigate to detail pages
 		panel.querySelectorAll('.global-index-item').forEach(item => {
 			item.addEventListener('click', () => {
@@ -4102,7 +4103,7 @@ export class MarketOverview extends HTMLElement {
 			});
 		});
 	}
-	
+
 	formatMacroPrice(price, name) {
 		// Format differently based on indicator type
 		if (name.includes('Treasury') || name.includes('Yield') || name.includes('Inflation') || name.includes('OAS') || name.includes('TED Spread')) {
@@ -4125,7 +4126,7 @@ export class MarketOverview extends HTMLElement {
 		if (price >= 10) return this.formatNumberWithSeparator(parseFloat(price.toFixed(2)));
 		return price.toFixed(3);
 	}
-	
+
 	formatPrice(price) {
 		let formatted;
 		if (price >= 10000) formatted = price.toFixed(0);
@@ -4134,31 +4135,31 @@ export class MarketOverview extends HTMLElement {
 		else formatted = price.toFixed(2);
 		return this.formatNumberWithSeparator(parseFloat(formatted));
 	}
-	
+
 	async fetchIndexData(symbol, retries = 2, useSelectedTimeRange = true) {
 		const timeParams = useSelectedTimeRange ? this.getTimeRangeParams(this.selectedTimeRange) : { range: '3mo', interval: '1d' };
 		const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${timeParams.interval}&range=${timeParams.range}`;
-		
+
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
 				// Always use CORS proxy (direct fetch will be blocked by CORS)
 				const { fetchWithProxy } = await import('../utils/proxy.js');
 				const data = await fetchWithProxy(yahooUrl);
-				
+
 				// Check for API errors in response
 				if (data.chart && data.chart.error) {
 					throw new Error(data.chart.error.description || 'API error');
 				}
-				
+
 				const parsedData = this.parseYahooData(data, symbol);
-				
+
 				// Calculate change based on selected time range
 				if (useSelectedTimeRange) {
 					const rangeChange = this.calculateChangeForTimeRange(parsedData, this.selectedTimeRange);
 					parsedData.change = rangeChange.change;
 					parsedData.changePercent = rangeChange.changePercent;
 				}
-				
+
 				return parsedData;
 			} catch (error) {
 				if (attempt === retries) {
@@ -4169,12 +4170,12 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	async fetchMultipleIndexData(symbols) {
 		// Yahoo Finance API supports multiple symbols: symbol1,symbol2,symbol3
 		const symbolsStr = symbols.join(',');
 		const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbolsStr}?interval=1d&range=3mo`;
-		
+
 		let response;
 		let data;
 		try {
@@ -4188,12 +4189,12 @@ export class MarketOverview extends HTMLElement {
 			const proxyData = await response.json();
 			data = JSON.parse(proxyData.contents);
 		}
-		
+
 		// Parse multi-symbol response
 		if (!data.chart || !data.chart.result) {
 			throw new Error('Invalid response format');
 		}
-		
+
 		const results = {};
 		data.chart.result.forEach((result, index) => {
 			const symbol = symbols[index];
@@ -4205,38 +4206,38 @@ export class MarketOverview extends HTMLElement {
 				}
 			}
 		});
-		
+
 		return results;
 	}
-	
+
 	async fetchHistoricalData(symbol, retries = 2) {
 		// Fetch data based on selected time range for historical comparison
 		// Use a longer range for historical comparison (always 1Y for the indication)
 		const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y`;
-		
+
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
 				// Always use CORS proxy (direct fetch will be blocked by CORS)
 				const { fetchWithProxy } = await import('../utils/proxy.js');
 				const data = await fetchWithProxy(yahooUrl);
-				
+
 				// Check for API errors
 				if (data.chart && data.chart.error) {
 					throw new Error(data.chart.error.description || 'API error');
 				}
-				
+
 				if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
 					return null;
 				}
-				
+
 				const result = data.chart.result[0];
 				const quotes = result.indicators?.quote?.[0];
 				const closes = quotes?.close || [];
-				
+
 				// Filter out null values
 				const validCloses = closes.filter(c => c !== null && c !== undefined);
 				if (validCloses.length === 0) return null;
-				
+
 				return {
 					min: Math.min(...validCloses),
 					max: Math.max(...validCloses),
@@ -4253,44 +4254,49 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	async fetchFredData(seriesId, retries = 2) {
-		const apiKey = '4934925036aaf864a2e479c52edfdac9';
+		const keys = getStorageKeys();
+		const apiKey = getLocal(keys.FRED_KEY);
+		if (!apiKey) {
+			console.error('FRED API key not configured');
+			return null;
+		}
 		const timeParams = this.getTimeRangeParams(this.selectedTimeRange);
-		
+
 		// Calculate how many data points we need based on time range
 		const daysToFetch = timeParams.daysBack || 365; // Default to 1 year for YTD
-		
+
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
 				// Use proxy utility for FRED API (tries local backend first)
 				const { fetchFredWithProxy } = await import('../utils/proxy.js');
 				const data = await fetchFredWithProxy(seriesId, apiKey, { limit: Math.max(daysToFetch, 365), sort_order: 'desc' });
-				
+
 				// Check for FRED API errors
 				if (data.error_message) {
 					throw new Error(data.error_message);
 				}
-				
+
 				const observations = data.observations || [];
 				const validObs = observations.filter(o => o.value !== '.' && o.value !== '' && !isNaN(Number(o.value)));
-				
+
 				if (validObs.length === 0) {
 					throw new Error('No valid data');
 				}
-				
+
 				const currentPrice = Number(validObs[0].value);
-				
+
 				// Build chart data (reversed for chronological order)
 				const chartData = validObs.slice().reverse().map(o => ({
 					time: new Date(o.date).getTime(),
 					value: Number(o.value)
 				}));
-				
+
 				// Calculate change based on selected time range
 				let startPrice = currentPrice;
 				const now = Date.now();
-				
+
 				if (this.selectedTimeRange === 'YTD') {
 					const currentYear = new Date().getFullYear();
 					const yearStart = new Date(currentYear, 0, 1).getTime();
@@ -4305,17 +4311,17 @@ export class MarketOverview extends HTMLElement {
 					const targetData = chartData.find(d => d.time >= targetTime);
 					startPrice = targetData?.value || chartData[0]?.value || currentPrice;
 				}
-				
+
 				const change = currentPrice - startPrice;
 				const changePercent = startPrice !== 0 ? (change / startPrice) * 100 : 0;
-				
+
 				// Calculate YTD for FRED data (always calculated for YTD display)
 				const currentYear = new Date().getFullYear();
 				const yearStart = new Date(currentYear, 0, 1).getTime();
 				const yearStartValue = chartData.find(d => d.time >= yearStart)?.value || currentPrice;
 				const ytdChange = currentPrice - yearStartValue;
 				const ytdPercent = yearStartValue !== 0 ? (ytdChange / yearStartValue) * 100 : 0;
-				
+
 				// Filter chart data to only include data within the selected time range
 				let filteredChartData = chartData;
 				if (this.selectedTimeRange !== 'YTD') {
@@ -4324,7 +4330,7 @@ export class MarketOverview extends HTMLElement {
 				} else {
 					filteredChartData = chartData.filter(d => d.time >= yearStart);
 				}
-				
+
 				return {
 					currentPrice,
 					change,
@@ -4343,28 +4349,33 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	async fetchFredHistoricalData(seriesId, retries = 2) {
-		const apiKey = '4934925036aaf864a2e479c52edfdac9';
+		const keys = getStorageKeys();
+		const apiKey = getLocal(keys.FRED_KEY);
+		if (!apiKey) {
+			console.error('FRED API key not configured');
+			return null;
+		}
 		const observationStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-		
+
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
 				const { fetchFredWithProxy } = await import('../utils/proxy.js');
 				const data = await fetchFredWithProxy(seriesId, apiKey, { observation_start: observationStart, sort_order: 'asc' });
-				
+
 				// Check for FRED API errors
 				if (data.error_message) {
 					throw new Error(data.error_message);
 				}
-				
+
 				const observations = data.observations || [];
 				const validValues = observations
 					.filter(o => o.value !== '.' && o.value !== '' && !isNaN(Number(o.value)))
 					.map(o => Number(o.value));
-				
+
 				if (validValues.length === 0) return null;
-				
+
 				return {
 					min: Math.min(...validValues),
 					max: Math.max(...validValues),
@@ -4381,22 +4392,22 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	calculateHistoricalIndication(currentPrice, historical) {
 		if (!historical || !currentPrice) {
 			return { status: 'neutral', text: 'N/A', percentile: null };
 		}
-		
+
 		const { min, max, values } = historical;
 		const range = max - min;
 		if (range === 0) {
 			return { status: 'neutral', text: 'Stable', percentile: 50 };
 		}
-		
+
 		// Calculate percentile
 		const below = values.filter(v => v < currentPrice).length;
 		const percentile = (below / values.length) * 100;
-		
+
 		let status, text;
 		if (percentile >= 80) {
 			status = 'high';
@@ -4408,26 +4419,26 @@ export class MarketOverview extends HTMLElement {
 			status = 'neutral';
 			text = `Normal ${percentile.toFixed(0)}th`;
 		}
-		
+
 		return { status, text, percentile };
 	}
-	
+
 	parseYahooData(data, symbol) {
 		if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
 			throw new Error('No data in response');
 		}
-		
+
 		const result = data.chart.result[0];
 		const meta = result.meta;
-		
+
 		if (!meta) {
 			throw new Error('No metadata in response');
 		}
-		
+
 		const timestamps = result.timestamp || [];
 		const quotes = result.indicators?.quote?.[0];
 		const closes = quotes?.close || [];
-		
+
 		const validData = [];
 		for (let i = 0; i < timestamps.length; i++) {
 			if (closes[i] !== null && closes[i] !== undefined) {
@@ -4437,7 +4448,7 @@ export class MarketOverview extends HTMLElement {
 				});
 			}
 		}
-		
+
 		const currentPrice = meta.regularMarketPrice || meta.previousClose || 0;
 		// Get previous close from chart data if not in meta
 		let previousClose = meta.previousClose;
@@ -4448,7 +4459,7 @@ export class MarketOverview extends HTMLElement {
 		previousClose = previousClose || currentPrice;
 		const change = currentPrice - previousClose;
 		const changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0;
-		
+
 		// Calculate YTD (Year-to-Date)
 		const currentYear = new Date().getFullYear();
 		const yearStart = new Date(currentYear, 0, 1).getTime();
@@ -4456,7 +4467,7 @@ export class MarketOverview extends HTMLElement {
 		const ytdStartPrice = yearStartData?.value || validData[0]?.value || currentPrice;
 		const ytdChange = currentPrice - ytdStartPrice;
 		const ytdPercent = ytdStartPrice !== 0 ? (ytdChange / ytdStartPrice) * 100 : 0;
-		
+
 		return {
 			currentPrice,
 			change,
@@ -4466,7 +4477,7 @@ export class MarketOverview extends HTMLElement {
 			chartData: validData // Keep all 3 months of data
 		};
 	}
-	
+
 	getCardDescription(name) {
 		const descriptions = {
 			'S&P 500': 'US stock market benchmark index',
@@ -4491,19 +4502,19 @@ export class MarketOverview extends HTMLElement {
 		};
 		return descriptions[name] || 'Market indicator';
 	}
-	
+
 	createIndexCard(name, data, indication, symbol, source = 'yahoo') {
 		const card = document.createElement('div');
 		card.className = `index-card ${indication.status}`;
 		card.style.cursor = 'pointer';
-		
+
 		const changeClass = data.change >= 0 ? 'positive' : 'negative';
 		const changeSign = data.change >= 0 ? '+' : '';
 		const description = this.getCardDescription(name);
-		
+
 		// Get chart title based on time range
 		const chartTitle = this.getChartTitle();
-		
+
 		card.innerHTML = `
 			<div class="card-header">
 				<div class="card-name">${name}</div>
@@ -4526,40 +4537,40 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Make card clickable - use capture phase to ensure it works
 		card.addEventListener('click', (e) => {
 			e.stopPropagation();
 			console.log('Card clicked:', name, symbol);
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: {
 					page: 'indicator-detail',
 					symbol: symbol,
 					name: name,
 					description: '',
 					source: source
-				} 
+				}
 			}));
 		}, true);
-		
+
 		setTimeout(() => {
 			this.renderMiniChart(card.querySelector('canvas'), data.chartData, data.changePercent);
 		}, 200);
-		
+
 		return card;
 	}
-	
+
 	createMacroCard(name, description, data, indication, symbol, source = 'yahoo') {
 		const card = document.createElement('div');
 		card.className = `macro-card ${indication.status}`;
 		card.style.cursor = 'pointer';
-		
+
 		const changeClass = data.change >= 0 ? 'positive' : 'negative';
 		const changeSign = data.change >= 0 ? '+' : '';
-		
+
 		// Get chart title based on time range
 		const chartTitle = this.getChartTitle();
-		
+
 		card.innerHTML = `
 			<div class="card-header">
 				<div>
@@ -4585,65 +4596,65 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Make card clickable - use capture phase to ensure it works
 		card.addEventListener('click', (e) => {
 			e.stopPropagation();
 			console.log('Card clicked:', name, symbol);
-			window.dispatchEvent(new CustomEvent('navigate', { 
-				detail: { 
+			window.dispatchEvent(new CustomEvent('navigate', {
+				detail: {
 					page: 'indicator-detail',
 					symbol: symbol,
 					name: name,
 					description: description,
 					source: source
-				} 
+				}
 			}));
 		}, true);
-		
+
 		setTimeout(() => {
 			this.renderMiniChart(card.querySelector('canvas'), data.chartData, data.changePercent);
 		}, 200);
-		
+
 		return card;
 	}
-	
+
 	setupAISummaryButton() {
 		// Use setTimeout to ensure DOM is ready
 		setTimeout(() => {
 			const aiSummaryBtn = this.shadowRoot.getElementById('market-ai-summary-btn');
 			const overlay = this.shadowRoot.getElementById('ai-summary-modal-overlay');
 			const closeBtn = this.shadowRoot.getElementById('ai-summary-modal-close');
-			
+
 			if (!aiSummaryBtn) {
 				console.error('[AI Market Summary] Button not found');
 				return;
 			}
-			
+
 			if (!overlay) {
 				console.error('[AI Market Summary] Modal overlay not found');
 				return;
 			}
-			
+
 			if (!closeBtn) {
 				console.error('[AI Market Summary] Close button not found');
 				return;
 			}
-			
+
 			console.log('[AI Market Summary] Setting up button listeners');
-			
+
 			aiSummaryBtn.addEventListener('click', () => {
 				console.log('[AI Market Summary] Button clicked');
 				this.openAISummaryModal();
 			});
-			
+
 			closeBtn.addEventListener('click', () => {
 				overlay.classList.remove('show');
 				if (aiSummaryBtn) {
 					aiSummaryBtn.disabled = false;
 				}
 			});
-			
+
 			overlay.addEventListener('click', (e) => {
 				if (e.target === overlay) {
 					overlay.classList.remove('show');
@@ -4654,26 +4665,26 @@ export class MarketOverview extends HTMLElement {
 			});
 		}, 100);
 	}
-	
+
 	async openAISummaryModal() {
 		const overlay = this.shadowRoot.getElementById('ai-summary-modal-overlay');
 		const content = this.shadowRoot.getElementById('ai-summary-modal-content');
 		const aiSummaryBtn = this.shadowRoot.getElementById('market-ai-summary-btn');
-		
+
 		if (!overlay || !content) return;
-		
+
 		overlay.classList.add('show');
 		content.innerHTML = '<div class="ai-summary-loading">Generating AI market summary...</div>';
-		
+
 		if (aiSummaryBtn) {
 			aiSummaryBtn.disabled = true;
 		}
-		
+
 		// Check cache first - include time range in cache key
 		const { getCachedData, setCachedData } = await import('../utils/cache.js');
 		const cacheKey = `market-summary-${this.selectedTimeRange}`;
 		const cachedSummary = getCachedData('market', cacheKey);
-		
+
 		if (cachedSummary) {
 			console.log(`[AI Market Summary] Using cached summary for time range: ${this.selectedTimeRange}`);
 			this.displayMarketSummary(cachedSummary, true);
@@ -4682,18 +4693,22 @@ export class MarketOverview extends HTMLElement {
 			}
 			return;
 		}
-		
+
 		try {
 			// Collect all market data (includes current time range)
 			const marketData = this.collectMarketData();
-			
+
 			// Call Gemini API
-			const geminiKey = 'AIzaSyCcE73jChTNokgneI8zfy_Z4zGu37JU_3A';
+			const keys = getStorageKeys();
+			const geminiKey = getLocal(keys.GEMINI_KEY);
+			if (!geminiKey) {
+				throw new Error('Gemini API key not configured. Please check your .env file.');
+			}
 			const summary = await this.callGeminiAPIForMarketSummary(geminiKey, marketData);
-			
+
 			// Cache the summary with time range in key
 			setCachedData('market', cacheKey, summary);
-			
+
 			// Display the summary
 			this.displayMarketSummary(summary, false);
 		} catch (error) {
@@ -4709,7 +4724,7 @@ export class MarketOverview extends HTMLElement {
 			}
 		}
 	}
-	
+
 	collectMarketData() {
 		const marketData = {
 			timeRange: this.selectedTimeRange,
@@ -4723,7 +4738,7 @@ export class MarketOverview extends HTMLElement {
 			macroIndicators: [],
 			commodities: []
 		};
-		
+
 		// Collect indices data from DOM
 		const globalOverviewPanel = this.shadowRoot.getElementById('global-overview-panel');
 		if (globalOverviewPanel) {
@@ -4733,10 +4748,10 @@ export class MarketOverview extends HTMLElement {
 				const name = item.querySelector('.global-index-name')?.textContent || '';
 				const priceText = item.querySelector('.global-index-price')?.textContent || '';
 				const changeText = item.querySelector('.global-index-change')?.textContent || '';
-				
+
 				const price = parseFloat(priceText.replace(/[^0-9.-]/g, '')) || 0;
 				const changePercent = parseFloat(changeText.replace(/[^0-9.-]/g, '')) || 0;
-				
+
 				marketData.indices.push({
 					symbol,
 					name,
@@ -4745,7 +4760,7 @@ export class MarketOverview extends HTMLElement {
 				});
 			});
 		}
-		
+
 		// Collect top movers
 		if (this.topPerformers) {
 			marketData.topMovers.gainers = (this.topPerformers.gainers || []).slice(0, 5).map(p => ({
@@ -4754,14 +4769,14 @@ export class MarketOverview extends HTMLElement {
 				price: p.price || 0,
 				changePercent: p.changePercent || 0
 			}));
-			
+
 			marketData.topMovers.losers = (this.topPerformers.losers || []).slice(0, 5).map(p => ({
 				symbol: p.symbol,
 				name: p.name || p.symbol,
 				price: p.price || 0,
 				changePercent: p.changePercent || 0
 			}));
-			
+
 			marketData.topMovers.mostActive = (this.topPerformers.active || []).slice(0, 5).map(p => ({
 				symbol: p.symbol,
 				name: p.name || p.symbol,
@@ -4769,7 +4784,7 @@ export class MarketOverview extends HTMLElement {
 				changePercent: p.changePercent || 0
 			}));
 		}
-		
+
 		// Collect currencies
 		const currenciesPanel = this.shadowRoot.getElementById('currencies-overview-panel');
 		if (currenciesPanel) {
@@ -4779,10 +4794,10 @@ export class MarketOverview extends HTMLElement {
 				const name = item.querySelector('.global-index-name')?.textContent || '';
 				const priceText = item.querySelector('.global-index-price')?.textContent || '';
 				const changeText = item.querySelector('.global-index-change')?.textContent || '';
-				
+
 				const price = parseFloat(priceText.replace(/[^0-9.-]/g, '')) || 0;
 				const changePercent = parseFloat(changeText.replace(/[^0-9.-]/g, '')) || 0;
-				
+
 				marketData.currencies.push({
 					symbol,
 					name,
@@ -4791,13 +4806,13 @@ export class MarketOverview extends HTMLElement {
 				});
 			});
 		}
-		
+
 		return marketData;
 	}
-	
+
 	async callGeminiAPIForMarketSummary(apiKey, marketData) {
 		console.log('[AI Market Summary] Calling Gemini API');
-		
+
 		const prompt = `Erstelle mir eine umfassende, klar strukturierte und optisch ansprechende Marktanalyse basierend auf den folgenden aktuellen Marktdaten.
 
 Die Analyse soll so aufgebaut sein, dass ich als Investor eine fundierte Übersicht über die aktuelle Marktsituation erhalte.
@@ -4869,9 +4884,9 @@ Struktur & Inhalt zwingend einhalten:
 Bitte nutze die bereitgestellten Daten und achte auf logische, verständliche Argumentation.
 
 Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
-		
+
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-		
+
 		const response = await fetch(url, {
 			method: 'POST',
 			headers: {
@@ -4885,56 +4900,56 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}]
 			})
 		});
-		
+
 		if (!response.ok) {
 			const errorText = await response.text();
 			throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
 		}
-		
+
 		const data = await response.json();
-		
+
 		if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts) {
 			throw new Error('Invalid response from Gemini API');
 		}
-		
+
 		const summary = data.candidates[0].content.parts[0].text;
 		return summary;
 	}
-	
+
 	displayMarketSummary(summary, fromCache) {
 		const content = this.shadowRoot.getElementById('ai-summary-modal-content');
 		if (!content) return;
-		
+
 		// Format and display the summary
 		let formattedSummary = summary;
-		
+
 		// Convert numbered emoji headings (1️⃣, 2️⃣, etc.) to h2 headings FIRST
 		formattedSummary = formattedSummary.replace(/^(\d+️⃣)\s+(.*)$/gim, '<h2>$2</h2>');
-		
+
 		// Convert Markdown headings
 		formattedSummary = formattedSummary.replace(/^### (.*)$/gim, '<h3>$1</h3>');
 		formattedSummary = formattedSummary.replace(/^## (.*)$/gim, '<h2>$1</h2>');
 		formattedSummary = formattedSummary.replace(/^# (.*)$/gim, '<h1>$1</h1>');
-		
+
 		// Convert bold text (**text**) to <strong>
 		formattedSummary = formattedSummary.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-		
+
 		// Convert bullet points (- or *) to proper list items
 		formattedSummary = formattedSummary.replace(/^(?![<])([-*])\s+(.*)$/gim, '<li>$2</li>');
-		
+
 		// Wrap consecutive list items in <ul> tags
 		formattedSummary = formattedSummary.replace(/(<li>.*?<\/li>(\n|$))+/g, (match) => {
 			return '<ul>' + match.replace(/\n/g, '') + '</ul>';
 		});
-		
+
 		// Split into lines and process
 		const lines = formattedSummary.split('\n');
 		let html = '';
 		let currentParagraph = '';
-		
+
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i].trim();
-			
+
 			if (!line) {
 				if (currentParagraph) {
 					html += '<p>' + currentParagraph + '</p>';
@@ -4942,7 +4957,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}
 				continue;
 			}
-			
+
 			if (line.startsWith('<h') || line.startsWith('<ul>') || line.startsWith('</ul>') || line.startsWith('<li>')) {
 				if (currentParagraph) {
 					html += '<p>' + currentParagraph + '</p>';
@@ -4957,47 +4972,47 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}
 			}
 		}
-		
+
 		if (currentParagraph) {
 			html += '<p>' + currentParagraph + '</p>';
 		}
-		
+
 		// Add cache information at the top
-		const cacheInfo = fromCache 
+		const cacheInfo = fromCache
 			? '<div class="ai-summary-cache-info">📦 This summary is cached and will be valid for 4 hours.</div>'
 			: '<div class="ai-summary-cache-info">💾 This summary will be cached for 4 hours.</div>';
-		
+
 		content.innerHTML = cacheInfo + html;
 	}
-	
+
 	setupOverviewInfoIcons() {
 		// Setup info icons for all three overview panels
 		const globalInfoIcon = this.shadowRoot.getElementById('global-overview-info-icon');
 		const macroInfoIcon = this.shadowRoot.getElementById('macro-overview-info-icon');
 		const currenciesInfoIcon = this.shadowRoot.getElementById('currencies-overview-info-icon');
-		
+
 		if (globalInfoIcon) {
 			globalInfoIcon.addEventListener('click', () => {
 				this.openOverviewInfoModal('global');
 			});
 		}
-		
+
 		if (macroInfoIcon) {
 			macroInfoIcon.addEventListener('click', () => {
 				this.openOverviewInfoModal('macro');
 			});
 		}
-		
+
 		if (currenciesInfoIcon) {
 			currenciesInfoIcon.addEventListener('click', () => {
 				this.openOverviewInfoModal('currencies');
 			});
 		}
-		
+
 		// Setup modal close handlers
 		const overlay = this.shadowRoot.getElementById('overview-info-modal-overlay');
 		const closeBtn = this.shadowRoot.getElementById('overview-info-modal-close');
-		
+
 		if (closeBtn) {
 			closeBtn.addEventListener('click', () => {
 				if (overlay) {
@@ -5005,7 +5020,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}
 			});
 		}
-		
+
 		if (overlay) {
 			overlay.addEventListener('click', (e) => {
 				if (e.target === overlay) {
@@ -5014,19 +5029,19 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			});
 		}
 	}
-	
+
 	openOverviewInfoModal(panelType) {
 		const overlay = this.shadowRoot.getElementById('overview-info-modal-overlay');
 		const title = this.shadowRoot.getElementById('overview-info-modal-title-text');
 		const content = this.shadowRoot.getElementById('overview-info-modal-content');
-		
+
 		if (!overlay || !title || !content) return;
-		
+
 		// Set title and content based on panel type
 		let titleText = '';
 		let infoContent = '';
-		
-		switch(panelType) {
+
+		switch (panelType) {
 			case 'global':
 				titleText = 'Global Market Overview';
 				infoContent = `
@@ -5060,7 +5075,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 					<p><strong>Tip:</strong> Click on any index card to view detailed historical data, charts, and additional metrics.</p>
 				`;
 				break;
-				
+
 			case 'macro':
 				titleText = 'Macroeconomic Risk Overview';
 				infoContent = `
@@ -5094,7 +5109,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 					<p><strong>Tip:</strong> These indicators work together to provide a comprehensive view of economic conditions. High VIX with rising gold and falling dollar may indicate significant market stress, while low VIX with stable inflation expectations suggests market confidence.</p>
 				`;
 				break;
-				
+
 			case 'currencies':
 				titleText = 'Currencies Overview';
 				infoContent = `
@@ -5136,26 +5151,26 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				`;
 				break;
 		}
-		
+
 		title.textContent = titleText;
 		content.innerHTML = infoContent;
 		overlay.classList.add('show');
 	}
-	
+
 	renderMiniChart(canvas, data, changePercent = null) {
 		if (!canvas || !data || data.length === 0) return;
-		
+
 		// Store chart data and changePercent in canvas element for later re-rendering
 		canvas.setAttribute('data-chart-data', JSON.stringify(data));
 		if (changePercent !== null && changePercent !== undefined) {
 			canvas.setAttribute('data-change-percent', changePercent.toString());
 		}
-		
+
 		setTimeout(() => {
 			const ctx = canvas.getContext('2d');
 			const dpr = window.devicePixelRatio || 1;
 			const rect = canvas.getBoundingClientRect();
-			
+
 			if (rect.width === 0 || rect.height === 0) {
 				canvas.width = 300 * dpr;
 				canvas.height = 80 * dpr;
@@ -5167,9 +5182,9 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				canvas.style.width = rect.width + 'px';
 				canvas.style.height = rect.height + 'px';
 			}
-			
+
 			ctx.scale(dpr, dpr);
-			
+
 			const width = canvas.width / dpr;
 			const height = canvas.height / dpr;
 			const paddingLeft = 30;
@@ -5178,29 +5193,29 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			const paddingBottom = 20;
 			const chartWidth = width - paddingLeft - paddingRight;
 			const chartHeight = height - paddingTop - paddingBottom;
-			
+
 			const values = data.map(d => d.value);
 			const dataMin = Math.min(...values);
 			const dataMax = Math.max(...values);
 			const dataRange = dataMax - dataMin || 1;
-			
+
 			// Add substantial padding to Y-axis scale to ensure full visibility
 			// Use 20% of the range, but at least 5% of the max value
 			const rangePadding = dataRange * 0.20;
 			const minPadding = dataMax * 0.05;
 			const scalePadding = Math.max(rangePadding, minPadding);
-			
+
 			const min = Math.max(0, dataMin - scalePadding); // Don't go below 0 for positive values
 			const max = dataMax + scalePadding;
 			const range = max - min || 1;
-			
+
 			ctx.clearRect(0, 0, width, height);
-			
+
 			// Check if light mode is active
 			const isLightMode = this.classList.contains('light-mode');
 			const gridColor = isLightMode ? '#8090a0' : '#1a2330';
 			const labelColor = isLightMode ? '#0a0a0a' : '#9fb0c0';
-			
+
 			// Draw grid lines
 			ctx.strokeStyle = gridColor;
 			ctx.lineWidth = 1;
@@ -5211,7 +5226,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				ctx.lineTo(width - paddingRight, y);
 				ctx.stroke();
 			}
-			
+
 			// Draw Y-axis labels (more readable)
 			ctx.fillStyle = labelColor;
 			ctx.font = '9px Inter, sans-serif';
@@ -5233,11 +5248,11 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}
 				ctx.fillText(label, paddingLeft - 4, y);
 			}
-			
+
 			// Calculate stepX first (needed for both chart and labels)
 			const stepX = chartWidth / (data.length - 1 || 1);
 			const xAxisY = height - paddingBottom;
-			
+
 			// Draw chart line and area FIRST (so X-axis is on top)
 			// Use changePercent if available (from selected time range), otherwise fall back to first vs last value
 			let isPositive;
@@ -5251,21 +5266,21 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			ctx.strokeStyle = isPositive ? '#10b981' : '#ef4444';
 			ctx.fillStyle = isPositive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
 			ctx.lineWidth = 1.5;
-			
+
 			// Helper function to calculate Y position, ensuring it stays within bounds
 			const getY = (value) => {
 				const normalized = (value - min) / range;
 				const clamped = Math.max(0, Math.min(1, normalized)); // Clamp between 0 and 1
 				return paddingTop + chartHeight - (clamped * chartHeight);
 			};
-			
+
 			// Draw area
 			ctx.beginPath();
-			
+
 			data.forEach((point, i) => {
 				const x = paddingLeft + (i * stepX);
 				const y = getY(point.value);
-				
+
 				if (i === 0) {
 					ctx.moveTo(x, xAxisY);
 					ctx.lineTo(x, y);
@@ -5273,17 +5288,17 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 					ctx.lineTo(x, y);
 				}
 			});
-			
+
 			ctx.lineTo(width - paddingRight, xAxisY);
 			ctx.closePath();
 			ctx.fill();
-			
+
 			// Draw line
 			ctx.beginPath();
 			data.forEach((point, i) => {
 				const x = paddingLeft + (i * stepX);
 				const y = getY(point.value);
-				
+
 				if (i === 0) {
 					ctx.moveTo(x, y);
 				} else {
@@ -5291,7 +5306,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}
 			});
 			ctx.stroke();
-			
+
 			// Draw X-axis line LAST (so it's on top and visible)
 			ctx.strokeStyle = '#4ea1f3';
 			ctx.lineWidth = 2;
@@ -5299,13 +5314,13 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			ctx.moveTo(paddingLeft, xAxisY);
 			ctx.lineTo(width - paddingRight, xAxisY);
 			ctx.stroke();
-			
+
 			// Draw X-axis labels
 			ctx.fillStyle = labelColor;
 			ctx.font = '8px Inter, sans-serif';
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'top';
-			
+
 			// Show month labels for 3 months: start, middle, end
 			const labelIndices = [0, Math.floor(data.length / 2), data.length - 1];
 			const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -5319,7 +5334,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			});
 		}, 50);
 	}
-	
+
 	createErrorCard(name) {
 		const card = document.createElement('div');
 		card.className = 'index-card';
@@ -5331,7 +5346,7 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 		`;
 		return card;
 	}
-	
+
 	rerenderAllMiniCharts() {
 		// Find all canvas elements with chart data
 		const canvases = this.shadowRoot.querySelectorAll('canvas[data-chart-data]');
@@ -5349,34 +5364,34 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			}
 		});
 	}
-	
+
 	setupTouchGestures() {
 		// Only enable on mobile devices
 		if (window.innerWidth > 768) return;
-		
+
 		let touchStartX = 0;
 		let touchStartY = 0;
 		let touchEndX = 0;
 		let touchEndY = 0;
 		const minSwipeDistance = 50;
-		
+
 		// Prevent default touch behaviors that interfere with gestures
 		document.addEventListener('touchstart', (e) => {
 			touchStartX = e.changedTouches[0].screenX;
 			touchStartY = e.changedTouches[0].screenY;
 		}, { passive: true });
-		
+
 		document.addEventListener('touchend', (e) => {
 			touchEndX = e.changedTouches[0].screenX;
 			touchEndY = e.changedTouches[0].screenY;
 			this.handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY, minSwipeDistance);
 		}, { passive: true });
 	}
-	
+
 	handleSwipe(startX, startY, endX, endY, minDistance) {
 		const deltaX = endX - startX;
 		const deltaY = endY - startY;
-		
+
 		// Check if it's a horizontal swipe (more horizontal than vertical)
 		if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minDistance) {
 			// On Market Overview, we don't need swipe navigation
@@ -5384,12 +5399,12 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 			// For now, we just prevent accidental swipes from interfering with scrolling
 		}
 	}
-	
+
 	handleRateLimitCooldown(active) {
 		const searchInput = this.shadowRoot.getElementById('stock-search-input');
 		const searchBtn = this.shadowRoot.getElementById('search-submit-btn');
 		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
-		
+
 		if (searchInput) {
 			searchInput.disabled = active;
 			if (active) {
@@ -5402,13 +5417,13 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				searchInput.style.cursor = 'text';
 			}
 		}
-		
+
 		if (searchBtn) {
 			searchBtn.disabled = active;
 			searchBtn.style.opacity = active ? '0.5' : '1';
 			searchBtn.style.cursor = active ? 'not-allowed' : 'pointer';
 		}
-		
+
 		if (active && dropdown) {
 			dropdown.classList.remove('show');
 		}

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config.js';
+import { getLocal, getStorageKeys } from '../utils/storage.js';
 
 export class StockChart extends HTMLElement {
 	constructor() {
@@ -23,11 +24,11 @@ export class StockChart extends HTMLElement {
 		this.peRatio = null; // Store current PE Ratio value
 		this.peRatioHistory = null; // Store historical PE Ratio data
 	}
-	
+
 	static get observedAttributes() {
 		return ['symbol'];
 	}
-	
+
 	attributeChangedCallback(name, oldValue, newValue) {
 		if (name === 'symbol' && newValue !== oldValue) {
 			this.symbol = newValue;
@@ -36,7 +37,7 @@ export class StockChart extends HTMLElement {
 			}
 		}
 	}
-	
+
 	connectedCallback() {
 		this.symbol = this.getAttribute('symbol');
 		this.shadowRoot.innerHTML = `
@@ -858,18 +859,18 @@ export class StockChart extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Event listeners
 		this.shadowRoot.getElementById('timeframe')?.addEventListener('change', async (e) => {
 			this.timeframe = e.target.value;
 			await this.loadData();
-			
+
 			// If tranche strategy is enabled, recalculate it with new timeframe
 			const trancheStrategyChecked = this.shadowRoot.getElementById('trancheStrategy')?.checked || false;
 			if (trancheStrategyChecked) {
 				await this.calculateTrancheStrategy();
 			}
-			
+
 			// Dispatch event to notify other components about timeframe change
 			this.dispatchEvent(new CustomEvent('timeframe-changed', {
 				detail: { timeframe: this.timeframe, symbol: this.symbol },
@@ -877,8 +878,8 @@ export class StockChart extends HTMLElement {
 				composed: true
 			}));
 		});
-		
-			['ma50', 'ma100', 'ma200', 'neutralValue', 'sp500', 'trancheStrategy', 'peRatio'].forEach(id => {
+
+		['ma50', 'ma100', 'ma200', 'neutralValue', 'sp500', 'trancheStrategy', 'peRatio'].forEach(id => {
 			this.shadowRoot.getElementById(id)?.addEventListener('change', async (e) => {
 				this.overlays[id] = e.target.checked;
 				// Reload data if MA is enabled to get historical data
@@ -888,7 +889,7 @@ export class StockChart extends HTMLElement {
 					const ma100Checked = this.shadowRoot.getElementById('ma100')?.checked || false;
 					const ma200Checked = this.shadowRoot.getElementById('ma200')?.checked || false;
 					const maxMAPeriod = ma200Checked ? 200 : (ma100Checked ? 100 : (ma50Checked ? 50 : 0));
-					
+
 					if (maxMAPeriod > 0) {
 						await this.loadHistoricalDataForMA(maxMAPeriod);
 					} else {
@@ -907,7 +908,7 @@ export class StockChart extends HTMLElement {
 				if (id === 'trancheStrategy' && e.target.checked) {
 					// Check if this is the first time activating (trancheLevels is null)
 					const isFirstActivation = this.trancheLevels === null;
-					
+
 					// On first activation, switch to 5y timeframe
 					if (isFirstActivation && this.timeframe !== '5y') {
 						this.timeframe = '5y';
@@ -935,67 +936,67 @@ export class StockChart extends HTMLElement {
 				}
 			});
 		});
-		
+
 		// Custom ticker input
 		const customTickerInput = this.shadowRoot.getElementById('custom-ticker');
 		const addTickerBtn = this.shadowRoot.getElementById('add-ticker-btn');
-		
+
 		addTickerBtn?.addEventListener('click', () => {
 			this.addCustomTicker();
 		});
-		
+
 		customTickerInput?.addEventListener('keypress', (e) => {
 			if (e.key === 'Enter') {
 				this.addCustomTicker();
 			}
 		});
-		
+
 		// 3-Tranche Strategy Info icon click handler
 		const trancheInfoIcon = this.shadowRoot.getElementById('tranche-info-icon');
 		const trancheInfoModal = this.shadowRoot.getElementById('tranche-info-modal');
 		const infoOverlay = this.shadowRoot.getElementById('info-modal-overlay');
 		const trancheInfoClose = this.shadowRoot.getElementById('tranche-info-close');
-		
+
 		trancheInfoIcon?.addEventListener('click', (e) => {
 			e.stopPropagation();
 			trancheInfoModal?.classList.add('show');
 			infoOverlay?.classList.add('show');
 		});
-		
+
 		trancheInfoClose?.addEventListener('click', () => {
 			trancheInfoModal?.classList.remove('show');
 			infoOverlay?.classList.remove('show');
 		});
-		
+
 		// Fair Value Info icon click handler
 		const fairvalueInfoIcon = this.shadowRoot.getElementById('fairvalue-info-icon');
 		const fairvalueInfoModal = this.shadowRoot.getElementById('fairvalue-info-modal');
 		const fairvalueInfoClose = this.shadowRoot.getElementById('fairvalue-info-close');
-		
+
 		fairvalueInfoIcon?.addEventListener('click', (e) => {
 			e.stopPropagation();
 			fairvalueInfoModal?.classList.add('show');
 			infoOverlay?.classList.add('show');
 		});
-		
+
 		fairvalueInfoClose?.addEventListener('click', () => {
 			fairvalueInfoModal?.classList.remove('show');
 			infoOverlay?.classList.remove('show');
 		});
-		
+
 		// Close modals when clicking overlay
 		infoOverlay?.addEventListener('click', () => {
 			trancheInfoModal?.classList.remove('show');
 			fairvalueInfoModal?.classList.remove('show');
 			infoOverlay?.classList.remove('show');
 		});
-		
+
 		// Apply saved theme
 		const savedTheme = localStorage.getItem('theme') || 'dark';
 		if (savedTheme === 'light') {
 			this.classList.add('light-mode');
 		}
-		
+
 		// Listen for theme changes
 		this.themeChangeHandler = () => {
 			this.updateChartTheme();
@@ -1003,25 +1004,25 @@ export class StockChart extends HTMLElement {
 		window.addEventListener('storage', this.themeChangeHandler);
 		// Also listen for custom themechange event (for same-window changes)
 		window.addEventListener('themechange', this.themeChangeHandler);
-		
+
 		// Use MutationObserver to watch for class changes
 		this.observer = new MutationObserver(() => {
 			this.updateChartTheme();
 		});
 		this.observer.observe(this, { attributes: true, attributeFilter: ['class'] });
-		
+
 		// Setup watchlist button after DOM is ready
 		setTimeout(() => {
 			this.setupWatchlistButton();
 			this.checkWatchlistStatus();
 			this.setupAISummaryButton();
 		}, 0);
-		
+
 		if (this.symbol) {
 			this.loadData();
 		}
 	}
-	
+
 	disconnectedCallback() {
 		if (this.themeChangeHandler) {
 			window.removeEventListener('storage', this.themeChangeHandler);
@@ -1031,12 +1032,12 @@ export class StockChart extends HTMLElement {
 			this.observer.disconnect();
 		}
 	}
-	
+
 	updateChartTheme() {
 		if (!this.chart) return;
-		
+
 		const isLightMode = localStorage.getItem('theme') === 'light' || this.classList.contains('light-mode');
-		
+
 		// Update chart colors
 		this.chart.options.backgroundColor = isLightMode ? '#c0c9d4' : '#0b0f14';
 		this.chart.options.scales.x.ticks.color = isLightMode ? '#0a0a0a' : '#9fb0c0';
@@ -1044,33 +1045,33 @@ export class StockChart extends HTMLElement {
 		this.chart.options.scales.y.ticks.color = isLightMode ? '#0a0a0a' : '#9fb0c0';
 		this.chart.options.scales.y.grid.color = isLightMode ? '#a0aab8' : 'rgba(255,255,255,0.06)';
 		this.chart.options.plugins.legend.labels.color = isLightMode ? '#0a0a0a' : '#e6edf3';
-		
+
 		// Update chart container background
 		const chartContainer = this.shadowRoot.querySelector('.chart-container');
 		if (chartContainer) {
 			chartContainer.style.background = isLightMode ? '#c0c9d4' : '#0b0f14';
 			chartContainer.style.borderColor = isLightMode ? '#a0aab8' : '#1f2a37';
 		}
-		
+
 		this.chart.update();
 	}
-	
+
 	async loadData() {
 		if (!this.symbol) return;
-		
+
 		this.setStatus('Loading...');
-		
+
 		try {
 			const data = await this.fetchYahooFinanceData(this.symbol, this.timeframe);
 			this.chartData = data;
-			
+
 			// Always load historical data for Moving Averages if any MA is enabled
 			// Check overlays from checkboxes
 			const ma50Checked = this.shadowRoot.getElementById('ma50')?.checked || false;
 			const ma100Checked = this.shadowRoot.getElementById('ma100')?.checked || false;
 			const ma200Checked = this.shadowRoot.getElementById('ma200')?.checked || false;
 			const neutralValueChecked = this.shadowRoot.getElementById('neutralValue')?.checked || false;
-			
+
 			// Determine max period needed (always load for 200 if any MA is checked, to have data ready)
 			const maxMAPeriod = ma200Checked ? 200 : (ma100Checked ? 100 : (ma50Checked ? 50 : 0));
 			if (maxMAPeriod > 0) {
@@ -1078,7 +1079,7 @@ export class StockChart extends HTMLElement {
 			} else {
 				this.historicalData = null;
 			}
-			
+
 			// Load neutral value data if enabled
 			if (neutralValueChecked) {
 				await this.loadNeutralValueData();
@@ -1087,7 +1088,7 @@ export class StockChart extends HTMLElement {
 				this.neutralValueData = null;
 				this.updateNeutralValueWarning(false);
 			}
-			
+
 			// Load 3-tranche strategy if enabled
 			const trancheStrategyChecked = this.shadowRoot.getElementById('trancheStrategy')?.checked || false;
 			let trancheStrategyUpdatedChart = false;
@@ -1104,30 +1105,30 @@ export class StockChart extends HTMLElement {
 			} else {
 				this.trancheLevels = null;
 			}
-			
+
 			// Clear status before updating chart
 			if (!trancheStrategyChecked) {
 				this.setStatus('');
 			}
-			
+
 			// Only update chart if tranche strategy didn't already update it
 			if (!trancheStrategyUpdatedChart) {
 				this.updateChart();
 			}
-			
+
 			// Dispatch event to notify other components about timeframe (after data is loaded)
 			this.dispatchEvent(new CustomEvent('timeframe-changed', {
 				detail: { timeframe: this.timeframe, symbol: this.symbol },
 				bubbles: true,
 				composed: true
 			}));
-			
+
 			// Update watchlist button status after data is loaded
 			this.checkWatchlistStatus();
-			
+
 			// Setup and show AI Summary button
 			this.setupAISummaryButton();
-			
+
 			// Calculate and display price information based on selected timeframe
 			this.updatePriceInfoFromChartData();
 		} catch (error) {
@@ -1135,39 +1136,39 @@ export class StockChart extends HTMLElement {
 			this.setStatus('Error loading data. Please try again.');
 		}
 	}
-	
+
 	updatePriceInfoFromChartData() {
 		if (!this.chartData || this.chartData.length === 0) {
 			// Try to get current price from quote API as fallback
 			this.loadCurrentPriceOnly();
 			return;
 		}
-		
+
 		// Get first and last prices from chart data
 		const firstPrice = this.chartData[0]?.close;
 		const lastPrice = this.chartData[this.chartData.length - 1]?.close;
-		
-		if (firstPrice === null || firstPrice === undefined || 
-		    lastPrice === null || lastPrice === undefined) {
+
+		if (firstPrice === null || firstPrice === undefined ||
+			lastPrice === null || lastPrice === undefined) {
 			// Fallback to quote API
 			this.loadCurrentPriceOnly();
 			return;
 		}
-		
+
 		// Calculate change for the selected timeframe
 		const change = lastPrice - firstPrice;
 		const changePercent = firstPrice !== 0 ? ((change / firstPrice) * 100) : 0;
-		
+
 		// Display with last price as current price
 		this.updatePriceDisplay(lastPrice, change, changePercent);
 	}
-	
+
 	async loadCurrentPriceOnly() {
 		if (!this.symbol) return;
-		
+
 		try {
 			const quoteUrl = `http://localhost:3000/api/yahoo/quote?symbol=${this.symbol}`;
-			
+
 			let data;
 			try {
 				const response = await fetch(quoteUrl);
@@ -1179,10 +1180,10 @@ export class StockChart extends HTMLElement {
 				console.error('[StockChart] Error fetching quote:', error);
 				return;
 			}
-			
+
 			// Extract current price only
 			let price;
-			
+
 			if (data?.quoteResponse?.result?.[0]) {
 				price = data.quoteResponse.result[0].regularMarketPrice;
 			} else if (data?.finance?.result?.[0]) {
@@ -1192,7 +1193,7 @@ export class StockChart extends HTMLElement {
 			} else if (data?.result?.[0]) {
 				price = data.result[0].regularMarketPrice;
 			}
-			
+
 			if (price !== undefined && price !== null) {
 				// If we only have current price, show it without change info
 				this.updatePriceDisplay(price, null, null);
@@ -1201,15 +1202,15 @@ export class StockChart extends HTMLElement {
 			console.error('[StockChart] Error loading current price:', error);
 		}
 	}
-	
+
 	updatePriceDisplay(price, change, changePercent) {
 		const priceInfo = this.shadowRoot.getElementById('price-info');
 		const currentPriceEl = this.shadowRoot.getElementById('current-price');
 		const priceChangeEl = this.shadowRoot.getElementById('price-change');
 		const priceChangePercentEl = this.shadowRoot.getElementById('price-change-percent');
-		
+
 		if (!priceInfo || !currentPriceEl || !priceChangeEl || !priceChangePercentEl) return;
-		
+
 		// Format price
 		const formattedPrice = new Intl.NumberFormat('en-US', {
 			style: 'currency',
@@ -1217,17 +1218,17 @@ export class StockChart extends HTMLElement {
 			minimumFractionDigits: 2,
 			maximumFractionDigits: 2
 		}).format(price);
-		
+
 		// Update current price
 		currentPriceEl.textContent = formattedPrice;
-		
+
 		// Format and display change if available
 		if (change !== null && change !== undefined && !isNaN(change)) {
 			const changeValue = change;
 			const changeSign = changeValue >= 0 ? '+' : '';
 			const formattedChange = `${changeSign}${changeValue.toFixed(2)}`;
 			priceChangeEl.textContent = formattedChange;
-			
+
 			// Apply color class
 			const isPositive = changeValue >= 0;
 			priceChangeEl.className = `price-change ${isPositive ? 'positive' : 'negative'}`;
@@ -1236,14 +1237,14 @@ export class StockChart extends HTMLElement {
 			priceChangeEl.textContent = '-';
 			priceChangeEl.style.display = 'none';
 		}
-		
+
 		// Format and display change percent if available
 		if (changePercent !== null && changePercent !== undefined && !isNaN(changePercent)) {
 			const changePercentValue = changePercent;
 			const changePercentSign = changePercentValue >= 0 ? '+' : '';
 			const formattedChangePercent = `${changePercentSign}${changePercentValue.toFixed(2)}%`;
 			priceChangePercentEl.textContent = formattedChangePercent;
-			
+
 			// Apply color class
 			const isPositive = changePercentValue >= 0;
 			priceChangePercentEl.className = `price-change-percent ${isPositive ? 'positive' : 'negative'}`;
@@ -1252,11 +1253,11 @@ export class StockChart extends HTMLElement {
 			priceChangePercentEl.textContent = '-';
 			priceChangePercentEl.style.display = 'none';
 		}
-		
+
 		// Show price info
 		priceInfo.style.display = 'flex';
 	}
-	
+
 	async fetchYahooFinanceData(symbol, range, useHourlyOverride = null) {
 		// Use minute data for 1d, 5d, and 1w, daily for longer timeframes
 		let interval = '1d';
@@ -1271,9 +1272,9 @@ export class StockChart extends HTMLElement {
 		} else if (range === 'ytd') {
 			interval = '1d'; // Daily data for year-to-date
 		}
-		
+
 		const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
-		
+
 		// Always use CORS proxy (direct fetch will be blocked by CORS)
 		const { fetchWithProxy } = await import('../utils/proxy.js');
 		let data;
@@ -1283,11 +1284,11 @@ export class StockChart extends HTMLElement {
 			console.error('Error fetching chart data:', error);
 			throw new Error('Failed to fetch data. Your browser may be blocking external requests. Try disabling Tracking Prevention in Edge settings.');
 		}
-		
+
 		if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
 			throw new Error('No data in response');
 		}
-		
+
 		const result = data.chart.result[0];
 		const timestamps = result.timestamp || [];
 		const quotes = result.indicators?.quote?.[0] || {};
@@ -1296,7 +1297,7 @@ export class StockChart extends HTMLElement {
 		const lows = quotes.low || [];
 		const opens = quotes.open || [];
 		const volumes = quotes.volume || [];
-		
+
 		const series = [];
 		for (let i = 0; i < timestamps.length; i++) {
 			if (closes[i] !== null && closes[i] !== undefined) {
@@ -1313,7 +1314,7 @@ export class StockChart extends HTMLElement {
 					// Daily data: show only date
 					dateStr = date.toISOString().split('T')[0];
 				}
-				
+
 				series.push({
 					date: dateStr,
 					close: closes[i],
@@ -1324,16 +1325,16 @@ export class StockChart extends HTMLElement {
 				});
 			}
 		}
-		
+
 		return series;
 	}
-	
+
 	async loadHistoricalDataForMA(maxPeriod) {
 		// Determine how much historical data we need
 		// For minute/hourly data (1d, 5d, 1w), we need more data points
 		// For daily data, we need more days
 		const useIntraday = ['1d', '5d', '1w'].includes(this.timeframe);
-		
+
 		// Calculate how much extra data we need before the current timeframe
 		// We need at least maxPeriod data points BEFORE the current data starts
 		// Strategy: Fetch a range that is large enough to include:
@@ -1357,7 +1358,7 @@ export class StockChart extends HTMLElement {
 			// For daily: need maxPeriod trading days BEFORE current data
 			// We need to fetch a range that includes current timeframe + historical data
 			// Trading days: ~252 per year, ~21 per month, ~63 per quarter
-			
+
 			// Map current timeframe to approximate trading days
 			const timeframeDays = {
 				'1mo': 21,
@@ -1369,10 +1370,10 @@ export class StockChart extends HTMLElement {
 				'10y': 2520,
 				'max': 10000 // Very large number
 			};
-			
+
 			const currentDays = timeframeDays[this.timeframe] || 252;
 			const totalDaysNeeded = currentDays + maxPeriod;
-			
+
 			// Determine the range that gives us enough data
 			if (totalDaysNeeded <= 63) {
 				historicalRange = '3mo';
@@ -1389,22 +1390,22 @@ export class StockChart extends HTMLElement {
 			} else {
 				historicalRange = 'max';
 			}
-			
+
 			console.log(`[MA] Current timeframe: ${this.timeframe} (~${currentDays} days), Need ${maxPeriod} historical, Total: ${totalDaysNeeded} days, Fetching: ${historicalRange}`);
 		}
-		
+
 		try {
 			// Fetch historical data with the same interval as current data
 			// This will include current data + historical data before it
 			// Pass null to use the default interval logic based on timeframe
 			const allData = await this.fetchYahooFinanceData(this.symbol, historicalRange, null);
-			
+
 			// Get current data dates for reference
 			const currentDates = new Set(this.chartData.map(d => d.date));
-			
+
 			// Find the start date of current data
 			const currentStartDate = this.chartData.length > 0 ? new Date(this.chartData[0].date) : null;
-			
+
 			// Filter to get only data BEFORE the current timeframe starts
 			// This gives us the historical data we need for MA calculation
 			let historicalOnly = [];
@@ -1417,33 +1418,33 @@ export class StockChart extends HTMLElement {
 				// Fallback: filter by date string comparison
 				historicalOnly = allData.filter(d => !currentDates.has(d.date));
 			}
-			
+
 			// Sort historical data by date
 			historicalOnly.sort((a, b) => {
 				const dateA = new Date(a.date);
 				const dateB = new Date(b.date);
 				return dateA - dateB;
 			});
-			
+
 			// Take the last maxPeriod data points from historical data
 			// This ensures we have enough data points right before current data starts
 			if (historicalOnly.length > maxPeriod) {
 				historicalOnly = historicalOnly.slice(-maxPeriod);
 			}
-			
+
 			// Combine: historical first, then current
 			const combinedData = [...historicalOnly, ...this.chartData];
-			
+
 			// Sort by date to ensure chronological order (just to be safe)
 			combinedData.sort((a, b) => {
 				const dateA = new Date(a.date);
 				const dateB = new Date(b.date);
 				return dateA - dateB;
 			});
-			
+
 			// Store only the closes for MA calculation
 			const allCloses = combinedData.map(d => d.close).filter(c => c !== null && c !== undefined);
-			
+
 			if (allCloses.length >= maxPeriod) {
 				this.historicalData = allCloses;
 				console.log(`[MA] Loaded ${historicalOnly.length} historical + ${this.chartData.length} current = ${allCloses.length} total data points for ${maxPeriod} period MA`);
@@ -1456,39 +1457,39 @@ export class StockChart extends HTMLElement {
 			this.historicalData = null;
 		}
 	}
-	
+
 	updateChart() {
 		if (!this.chartData || this.chartData.length === 0) return;
-		
+
 		const canvas = this.shadowRoot?.getElementById('chart');
 		if (!canvas) {
 			console.warn('[StockChart] Canvas not found, skipping chart update');
 			return;
 		}
-		
+
 		const ctx = canvas.getContext('2d');
 		const dpr = window.devicePixelRatio || 1;
 		const rect = canvas.getBoundingClientRect();
-		
+
 		const width = rect.width > 0 ? rect.width : 800;
 		const height = rect.height > 0 ? rect.height : 400;
-		
+
 		canvas.width = width * dpr;
 		canvas.height = height * dpr;
 		ctx.scale(dpr, dpr);
 		canvas.style.width = width + 'px';
 		canvas.style.height = height + 'px';
-		
+
 		const labels = this.chartData.map(d => d.date);
 		const closes = this.chartData.map(d => d.close);
-		
+
 		const datasets = [{
 			label: `${this.symbol} Close`,
 			data: closes,
 			borderColor: '#4ea1f3',
 			backgroundColor: (context) => {
 				const chart = context.chart;
-				const {ctx, chartArea} = chart;
+				const { ctx, chartArea } = chart;
 				if (!chartArea) {
 					return null;
 				}
@@ -1502,7 +1503,7 @@ export class StockChart extends HTMLElement {
 			pointRadius: 0,
 			borderWidth: 2
 		}];
-		
+
 		// Add overlays with historical data support
 		if (this.overlays.ma50) {
 			const ma50 = this.calculateMAWithHistory(closes, 50);
@@ -1518,7 +1519,7 @@ export class StockChart extends HTMLElement {
 				fill: false
 			});
 		}
-		
+
 		if (this.overlays.ma100) {
 			const ma100 = this.calculateMAWithHistory(closes, 100);
 			// Ensure MA100 has the same length as closes array
@@ -1533,7 +1534,7 @@ export class StockChart extends HTMLElement {
 				fill: false
 			});
 		}
-		
+
 		if (this.overlays.ma200) {
 			const ma200 = this.calculateMAWithHistory(closes, 200);
 			// Ensure MA200 has the same length as closes array
@@ -1548,11 +1549,11 @@ export class StockChart extends HTMLElement {
 				fill: false
 			});
 		}
-		
+
 		if (this.overlays.neutralValue && this.neutralValueData) {
 			// Calculate neutral value for current timeframe
 			const neutralValues = this.calculateNeutralValueForTimeframe(closes, labels);
-			
+
 			// Add neutral value line
 			datasets.push({
 				label: 'Neutral Value (Index)',
@@ -1564,16 +1565,16 @@ export class StockChart extends HTMLElement {
 				tension: 0,
 				fill: false
 			});
-			
+
 			// Add 1 and 2 standard deviation bands using log-space transformation
 			// Statistically correct: P̂_t · e^(±k·σ_log)
 			if (this.neutralValueData.sigmaLog) {
 				const sigmaLog = this.neutralValueData.sigmaLog;
-				
+
 				// Calculate bands: P̂_t · e^(±k·σ_log)
 				const neutralPlus1SD = neutralValues.map(v => v !== null ? v * Math.exp(sigmaLog) : null);
 				const neutralMinus1SD = neutralValues.map(v => v !== null ? v * Math.exp(-sigmaLog) : null);
-				
+
 				datasets.push({
 					label: '+1σ',
 					data: neutralPlus1SD,
@@ -1584,7 +1585,7 @@ export class StockChart extends HTMLElement {
 					tension: 0,
 					fill: false
 				});
-				
+
 				datasets.push({
 					label: '-1σ',
 					data: neutralMinus1SD,
@@ -1595,11 +1596,11 @@ export class StockChart extends HTMLElement {
 					tension: 0,
 					fill: false
 				});
-				
+
 				// Add 2 standard deviation bands
 				const neutralPlus2SD = neutralValues.map(v => v !== null ? v * Math.exp(2 * sigmaLog) : null);
 				const neutralMinus2SD = neutralValues.map(v => v !== null ? v * Math.exp(-2 * sigmaLog) : null);
-				
+
 				datasets.push({
 					label: '+2σ',
 					data: neutralPlus2SD,
@@ -1610,7 +1611,7 @@ export class StockChart extends HTMLElement {
 					tension: 0,
 					fill: false
 				});
-				
+
 				datasets.push({
 					label: '-2σ',
 					data: neutralMinus2SD,
@@ -1623,7 +1624,7 @@ export class StockChart extends HTMLElement {
 				});
 			}
 		}
-		
+
 		// Add PE Ratio overlay if enabled
 		if (this.overlays.peRatio) {
 			// Show historical PE Ratio trend if available
@@ -1649,31 +1650,31 @@ export class StockChart extends HTMLElement {
 						});
 					}
 				}
-				
+
 				// Step 2: Calculate historical PE ratios (Price / EPS) for last 8-10 years
 				// We need to match EPS dates with price dates
 				const historicalPEs = [];
 				const tenYearsAgo = new Date();
 				tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
-				
+
 				smoothedEPS.forEach(epsItem => {
 					const epsDate = new Date(epsItem.date);
 					if (epsDate >= tenYearsAgo) {
 						// Find closest price for this EPS date
 						let closestPrice = null;
 						let minDiff = Infinity;
-						
+
 						for (let i = 0; i < this.chartData.length; i++) {
 							const priceDate = new Date(this.chartData[i].date);
 							const diff = Math.abs(priceDate - epsDate);
-							
+
 							// Allow up to 3 months difference
 							if (diff < 90 * 24 * 60 * 60 * 1000 && diff < minDiff) {
 								minDiff = diff;
 								closestPrice = closes[i];
 							}
 						}
-						
+
 						if (closestPrice && closestPrice > 0 && epsItem.eps > 0) {
 							const pe = closestPrice / epsItem.eps;
 							if (pe > 0 && isFinite(pe)) {
@@ -1682,7 +1683,7 @@ export class StockChart extends HTMLElement {
 						}
 					}
 				});
-				
+
 				// Calculate median PE (neutral PE)
 				let neutralPE = null;
 				if (historicalPEs.length > 0) {
@@ -1697,14 +1698,14 @@ export class StockChart extends HTMLElement {
 					neutralPE = this.peRatio;
 					console.log(`[PE Ratio] Using current PE as neutral PE: ${neutralPE}`);
 				}
-				
+
 				// Step 3: Linearly interpolate smoothed EPS to daily frequency
 				// Create a helper function to get interpolated EPS for any date
 				const getInterpolatedEPS = (targetDate) => {
 					// Find the two smoothed EPS points that bracket the target date
 					let beforeIndex = -1;
 					let afterIndex = -1;
-					
+
 					for (let i = 0; i < smoothedEPS.length; i++) {
 						const epsDate = new Date(smoothedEPS[i].date);
 						if (epsDate <= targetDate) {
@@ -1714,45 +1715,45 @@ export class StockChart extends HTMLElement {
 							break;
 						}
 					}
-					
+
 					// If target date is before first EPS date, use first value
 					if (beforeIndex === -1) {
 						return smoothedEPS[0]?.eps || null;
 					}
-					
+
 					// If target date is after last EPS date, use last value
 					if (afterIndex === -1) {
 						return smoothedEPS[smoothedEPS.length - 1]?.eps || null;
 					}
-					
+
 					// Linear interpolation between before and after EPS values
 					const beforeEPS = smoothedEPS[beforeIndex];
 					const afterEPS = smoothedEPS[afterIndex];
 					const beforeDate = new Date(beforeEPS.date);
 					const afterDate = new Date(afterEPS.date);
-					
+
 					// Calculate interpolation factor
 					const totalTime = afterDate - beforeDate;
 					const elapsedTime = targetDate - beforeDate;
 					const t = totalTime > 0 ? elapsedTime / totalTime : 0;
-					
+
 					// Linear interpolation: EPS(t) = EPS_before + (EPS_after - EPS_before) * t
 					const interpolatedEPS = beforeEPS.eps + (afterEPS.eps - beforeEPS.eps) * t;
 					return interpolatedEPS;
 				};
-				
+
 				console.log(`[PE Ratio] Prepared interpolation function for ${smoothedEPS.length} smoothed EPS points`);
-				
+
 				// Step 4: Calculate Fair Value for each chart point using interpolated daily EPS
 				// Fair Value = interpolated daily EPS × PE_neutral
 				const fairValuePrices = [];
-				
+
 				labels.forEach((label, index) => {
 					const chartDate = new Date(this.chartData[index].date);
-					
+
 					// Get interpolated EPS for this exact chart date
 					const applicableEPS = getInterpolatedEPS(chartDate);
-					
+
 					// Calculate Fair Value = interpolated daily EPS × PE_neutral
 					if (applicableEPS && applicableEPS > 0 && neutralPE && neutralPE > 0) {
 						const fairValue = applicableEPS * neutralPE;
@@ -1761,13 +1762,13 @@ export class StockChart extends HTMLElement {
 						fairValuePrices.push(null);
 					}
 				});
-				
+
 				const validValues = fairValuePrices.filter(v => v !== null).length;
 				console.log(`[PE Ratio] Calculated ${validValues} Fair Value prices from ${fairValuePrices.length} chart points`);
 				if (validValues > 0) {
 					console.log(`[PE Ratio] Sample Fair Values: first=${fairValuePrices.find(v => v !== null)?.toFixed(2)}, last=${fairValuePrices.slice().reverse().find(v => v !== null)?.toFixed(2)}`);
 				}
-				
+
 				// Add Fair Value line (calculated from smoothed EPS × neutral PE)
 				datasets.push({
 					label: `Fair Value (Stock) - PE: ${neutralPE ? neutralPE.toFixed(2) : 'N/A'}`,
@@ -1783,7 +1784,7 @@ export class StockChart extends HTMLElement {
 			} else if (this.peRatio !== null && this.peRatio !== undefined) {
 				// Fallback: Show current PE ratio as horizontal line if no history available
 				const currentPrice = closes[closes.length - 1];
-				
+
 				datasets.push({
 					label: `PE Ratio: ${this.peRatio.toFixed(2)} (Current)`,
 					data: labels.map(() => currentPrice),
@@ -1796,27 +1797,27 @@ export class StockChart extends HTMLElement {
 				});
 			}
 		}
-		
+
 		// Add 3-Tranche Strategy levels if enabled
 		if (this.overlays.trancheStrategy && this.trancheLevels) {
 			// Tranches are always active (trend filter removed)
 			// Clear any previous status
 			this.setStatus('');
-			
+
 			// Safety check: ensure tranche levels are valid
 			if (this.trancheLevels.tranche1 === null || this.trancheLevels.tranche1 === undefined ||
-			    this.trancheLevels.tranche2 === null || this.trancheLevels.tranche2 === undefined ||
-			    this.trancheLevels.tranche3 === null || this.trancheLevels.tranche3 === undefined) {
+				this.trancheLevels.tranche2 === null || this.trancheLevels.tranche2 === undefined ||
+				this.trancheLevels.tranche3 === null || this.trancheLevels.tranche3 === undefined) {
 				console.warn('[3-Tranche] Invalid tranche levels, skipping display');
 				return;
 			}
-			
+
 			const tranche1Value = this.trancheLevels.tranche1;
 			const tranche2Value = this.trancheLevels.tranche2;
 			const tranche3Value = this.trancheLevels.tranche3;
 			const weights = this.trancheLevels.weights || { tranche1: 0.20, tranche2: 0.30, tranche3: 0.50 };
 			const confirmations = this.trancheLevels.confirmations || {};
-			
+
 			// Helper function to format label with confirmation signals
 			const formatLabel = (trancheNum, weight, confirmation) => {
 				let label = `Tranche ${trancheNum} - ${(weight * 100).toFixed(0)}%`;
@@ -1825,7 +1826,7 @@ export class StockChart extends HTMLElement {
 				}
 				return label;
 			};
-			
+
 			// Create horizontal lines for each tranche level with weightings and confirmations
 			datasets.push({
 				label: formatLabel(1, weights.tranche1, confirmations.tranche1),
@@ -1836,7 +1837,7 @@ export class StockChart extends HTMLElement {
 				pointRadius: 0,
 				fill: false
 			});
-			
+
 			datasets.push({
 				label: formatLabel(2, weights.tranche2, confirmations.tranche2),
 				data: labels.map(() => tranche2Value),
@@ -1846,7 +1847,7 @@ export class StockChart extends HTMLElement {
 				pointRadius: 0,
 				fill: false
 			});
-			
+
 			datasets.push({
 				label: formatLabel(3, weights.tranche3, confirmations.tranche3),
 				data: labels.map(() => tranche3Value),
@@ -1857,11 +1858,11 @@ export class StockChart extends HTMLElement {
 				fill: false
 			});
 		}
-		
+
 		// OLD: Add Gamma Heatmap visualization if enabled (REMOVED)
 		if (false && this.overlays.gammaHeatmap && this.gammaData && this.gammaData.data && this.gammaData.data.length > 0) {
 			console.log('[Gamma Heatmap] Rendering heatmap with', this.gammaData.data.length, 'strikes');
-			
+
 			// Group GEX by strike (combine calls and puts)
 			const strikeMap = new Map();
 			for (const item of this.gammaData.data) {
@@ -1876,7 +1877,7 @@ export class StockChart extends HTMLElement {
 				}
 				entry.totalGEX = entry.callGEX + entry.putGEX;
 			}
-			
+
 			// Calculate max absolute GEX for normalization
 			const maxAbsGEX = Math.max(...Array.from(strikeMap.values()).map(d => Math.abs(d.totalGEX)));
 			if (maxAbsGEX === 0) {
@@ -1884,17 +1885,17 @@ export class StockChart extends HTMLElement {
 			} else {
 				// Sort strikes to create a heatmap
 				const sortedStrikes = Array.from(strikeMap.entries()).sort((a, b) => a[0] - b[0]);
-				
+
 				// Create a single heatmap dataset showing GEX intensity
 				// We'll show it as horizontal bands at each strike level
 				for (const [strike, data] of sortedStrikes) {
 					// Normalize GEX to 0-1 range for color intensity
 					const intensity = Math.min(Math.abs(data.totalGEX) / maxAbsGEX, 1);
 					const alpha = Math.max(intensity * 0.4, 0.1); // Minimum visibility
-					const color = data.totalGEX > 0 
+					const color = data.totalGEX > 0
 						? `rgba(16, 185, 129, ${alpha})` // Green for positive (calls)
 						: `rgba(239, 68, 68, ${alpha})`; // Red for negative (puts)
-					
+
 					// Add a dataset for this strike level (as a horizontal line/band)
 					datasets.push({
 						label: `GEX ${strike.toFixed(0)}`,
@@ -1908,7 +1909,7 @@ export class StockChart extends HTMLElement {
 						hidden: false // Show in chart
 					});
 				}
-				
+
 				// Add Call Wall and Put Wall as horizontal lines
 				if (this.gammaData.callWall) {
 					datasets.push({
@@ -1921,7 +1922,7 @@ export class StockChart extends HTMLElement {
 						fill: false
 					});
 				}
-				
+
 				if (this.gammaData.putWall) {
 					datasets.push({
 						label: 'Put Wall',
@@ -1943,19 +1944,19 @@ export class StockChart extends HTMLElement {
 				});
 			}
 		}
-		
+
 		if (this.chart) {
 			this.chart.destroy();
 		}
-		
+
 		if (typeof Chart === 'undefined') {
 			this.setStatus('Chart.js not loaded. Please refresh the page.');
 			return;
 		}
-		
+
 		// Check theme from localStorage for reliable detection
 		const isLightMode = localStorage.getItem('theme') === 'light';
-		
+
 		this.chart = new Chart(ctx, {
 			type: 'line',
 			data: { labels, datasets },
@@ -1984,7 +1985,7 @@ export class StockChart extends HTMLElement {
 								const datasetLabel = context.dataset.label || '';
 								const value = context.parsed.y;
 								const formattedValue = value !== null && !isNaN(value) ? value.toFixed(2) : 'N/A';
-								
+
 								// Custom tooltip for Neutral Value with note
 								if (datasetLabel === 'Neutral Value (Index)') {
 									return [
@@ -1994,7 +1995,7 @@ export class StockChart extends HTMLElement {
 										'for major indices, not individual stocks.'
 									];
 								}
-								
+
 								return `${datasetLabel}: ${formattedValue}`;
 							}
 						}
@@ -2002,7 +2003,7 @@ export class StockChart extends HTMLElement {
 				}
 			}
 		});
-		
+
 		// Load overlays AFTER chart is created so they can update it
 		// Use setTimeout to ensure chart is fully initialized
 		setTimeout(() => {
@@ -2010,69 +2011,69 @@ export class StockChart extends HTMLElement {
 				// Load S&P 500 data for comparison
 				this.loadComparisonTicker('^GSPC', 'S&P 500');
 			}
-			
+
 			// Load custom tickers
 			this.customTickers.forEach(ticker => {
 				this.loadComparisonTicker(ticker, ticker);
 			});
 		}, 100);
 	}
-	
+
 	addCustomTicker() {
 		const input = this.shadowRoot.getElementById('custom-ticker');
 		const ticker = input.value.trim().toUpperCase();
-		
+
 		if (!ticker) {
 			return;
 		}
-		
+
 		// Validate ticker format (basic check)
 		if (!/^[A-Z.^]{1,10}$/.test(ticker)) {
 			this.setStatus('Invalid ticker format. Use letters, dots, or ^ for indices.');
 			return;
 		}
-		
+
 		// Don't add if already exists
 		if (this.customTickers.has(ticker)) {
 			this.setStatus(`${ticker} is already added.`);
 			return;
 		}
-		
+
 		// Don't add if it's the same as the main symbol
 		if (ticker === this.symbol) {
 			this.setStatus('Cannot compare with the same ticker.');
 			return;
 		}
-		
+
 		this.customTickers.add(ticker);
 		input.value = '';
 		this.setStatus(`Loading ${ticker}...`);
-		
+
 		// Update chart with new ticker
 		this.updateChart();
 	}
-	
+
 	async loadComparisonTicker(tickerSymbol, tickerLabel, datasets = null, labels = null) {
 		try {
 			if (!this.chartData || this.chartData.length === 0) {
 				console.warn('No chart data available for comparison');
 				return;
 			}
-			
+
 			this.setStatus(`Loading ${tickerLabel}...`);
-			
+
 			const tickerData = await this.fetchYahooFinanceData(tickerSymbol, this.timeframe);
 			const tickerCloses = tickerData.map(d => d.close);
-			
+
 			// Normalize ticker to match the stock's scale (percentage change from first point)
 			const stockCloses = this.chartData.map(d => d.close);
 			const stockFirst = stockCloses[0];
 			const tickerFirst = tickerCloses[0];
-			
+
 			if (!tickerFirst || !stockFirst) {
 				throw new Error('Invalid data');
 			}
-			
+
 			// Align arrays by date if possible, otherwise use index alignment
 			const normalizedTicker = [];
 			for (let i = 0; i < stockCloses.length; i++) {
@@ -2080,12 +2081,12 @@ export class StockChart extends HTMLElement {
 				const tickerValue = tickerCloses[tickerIndex] || tickerCloses[tickerCloses.length - 1];
 				normalizedTicker.push((tickerValue / tickerFirst) * stockFirst);
 			}
-			
+
 			// Generate a unique color for each ticker
 			const colors = ['#10b981', '#8b5cf6', '#ec4899', '#f59e0b', '#06b6d4'];
 			const currentDatasets = this.chart ? this.chart.data.datasets : (datasets || []);
 			const colorIndex = currentDatasets.length % colors.length;
-			
+
 			const newDataset = {
 				label: `${tickerLabel} (normalized)`,
 				data: normalizedTicker,
@@ -2095,7 +2096,7 @@ export class StockChart extends HTMLElement {
 				pointRadius: 0,
 				tension: 0.1
 			};
-			
+
 			if (this.chart) {
 				// Chart already exists, add dataset and update
 				this.chart.data.datasets.push(newDataset);
@@ -2104,7 +2105,7 @@ export class StockChart extends HTMLElement {
 				// Chart not yet created, add to datasets array
 				datasets.push(newDataset);
 			}
-			
+
 			this.setStatus('');
 			console.log(`Successfully loaded ${tickerLabel} as overlay`);
 		} catch (error) {
@@ -2116,12 +2117,12 @@ export class StockChart extends HTMLElement {
 			}
 		}
 	}
-	
+
 	async loadSP500Comparison(datasets, labels) {
 		// Legacy method - redirect to new method
 		await this.loadComparisonTicker('^GSPC', 'S&P 500', datasets, labels);
 	}
-	
+
 	calculateMA(values, period) {
 		const ma = [];
 		for (let i = 0; i < values.length; i++) {
@@ -2134,24 +2135,24 @@ export class StockChart extends HTMLElement {
 		}
 		return ma;
 	}
-	
+
 	calculateMAWithHistory(currentValues, period) {
 		// If we have historical data, use it for MA calculation
 		if (this.historicalData && this.historicalData.length >= period) {
 			// Calculate MA for all historical + current values
 			const allMA = this.calculateMA(this.historicalData, period);
-			
+
 			// The historical data structure is: [historical data points...current data points]
 			// allMA is calculated from this combined array
 			// The first (period - 1) values in allMA will be null (not enough data)
 			// After that, we have valid MA values
 			// We need the portion of allMA that corresponds to currentValues
-			
+
 			// Since historicalData ends with currentValues, allMA should end with MA values for currentValues
 			// We want the last currentValues.length values from allMA
 			const startIdx = Math.max(0, allMA.length - currentValues.length);
 			let result = allMA.slice(startIdx);
-			
+
 			// Ensure result has exactly currentValues.length elements
 			if (result.length < currentValues.length) {
 				// Pad with nulls at the beginning if needed
@@ -2161,11 +2162,11 @@ export class StockChart extends HTMLElement {
 				// Take only the last currentValues.length values
 				result = result.slice(-currentValues.length);
 			}
-			
+
 			// Count how many non-null values we have
 			const validCount = result.filter(v => v !== null).length;
 			console.log(`[MA${period}] Historical: ${this.historicalData.length}, All MA: ${allMA.length}, Result: ${result.length}, Valid: ${validCount}, Target: ${currentValues.length}`);
-			
+
 			return result;
 		} else {
 			// Fallback to regular calculation if no historical data
@@ -2174,7 +2175,7 @@ export class StockChart extends HTMLElement {
 			return this.calculateMA(currentValues, period);
 		}
 	}
-	
+
 	padMAArray(maArray, targetLength) {
 		// If MA array is shorter than target, pad with nulls at the beginning
 		if (maArray.length < targetLength) {
@@ -2187,10 +2188,10 @@ export class StockChart extends HTMLElement {
 		}
 		return maArray;
 	}
-	
+
 	async loadPERatio() {
 		if (!this.symbol) return;
-		
+
 		try {
 			// First, get current PE ratio
 			const response = await fetch(`${API_BASE_URL}/api/fundamentals/${this.symbol}`);
@@ -2200,45 +2201,45 @@ export class StockChart extends HTMLElement {
 				this.peRatioHistory = null;
 				return;
 			}
-			
+
 			const data = await response.json();
 			console.log('[PE Ratio] Full response structure:', Object.keys(data));
-			
+
 			// Extract current PE ratio from different possible locations
 			let peRatio = null;
-			
+
 			// Try quoteSummary.defaultKeyStatistics format first (most common)
 			if (data.quoteSummary?.result?.[0]?.defaultKeyStatistics) {
 				const stats = data.quoteSummary.result[0].defaultKeyStatistics;
 				console.log('[PE Ratio] Found defaultKeyStatistics:', Object.keys(stats));
 				peRatio = stats.trailingPE?.raw || stats.forwardPE?.raw;
 			}
-			
+
 			// Try quoteSummary.summaryDetail format
 			if (!peRatio && data.quoteSummary?.result?.[0]?.summaryDetail) {
 				const summary = data.quoteSummary.result[0].summaryDetail;
 				console.log('[PE Ratio] Found quoteSummary.summaryDetail:', Object.keys(summary));
 				peRatio = summary.trailingPE?.raw || summary.forwardPE?.raw;
 			}
-			
+
 			// Try Finnhub format
 			if (!peRatio && data.financials?.metric) {
 				console.log('[PE Ratio] Found financials.metric:', Object.keys(data.financials.metric));
-				peRatio = data.financials.metric.peTTM || 
-				         data.financials.metric.peExclExtraTTM || 
-				         data.financials.metric.peBasicExclExtraTTM ||
-				         data.financials.metric.forwardPE;
+				peRatio = data.financials.metric.peTTM ||
+					data.financials.metric.peExclExtraTTM ||
+					data.financials.metric.peBasicExclExtraTTM ||
+					data.financials.metric.forwardPE;
 			}
-			
+
 			// Try direct metric format
 			if (!peRatio && data.metric) {
 				console.log('[PE Ratio] Found direct metric:', Object.keys(data.metric));
-				peRatio = data.metric.peTTM || 
-				         data.metric.peExclExtraTTM || 
-				         data.metric.peBasicExclExtraTTM ||
-				         data.metric.forwardPE;
+				peRatio = data.metric.peTTM ||
+					data.metric.peExclExtraTTM ||
+					data.metric.peBasicExclExtraTTM ||
+					data.metric.forwardPE;
 			}
-			
+
 			if (peRatio && peRatio > 0 && isFinite(peRatio)) {
 				this.peRatio = peRatio;
 				console.log(`[PE Ratio] Loaded current PE Ratio: ${this.peRatio}`);
@@ -2246,106 +2247,106 @@ export class StockChart extends HTMLElement {
 				console.warn('[PE Ratio] No valid current PE ratio found. Available keys:', JSON.stringify(Object.keys(data)).substring(0, 200));
 				this.peRatio = null;
 			}
-			
-		// Now fetch historical fundamentals to calculate PE ratio from EPS and price
-		const historicalResponse = await fetch(`${API_BASE_URL}/api/fundamentals/historical/${this.symbol}`);
-		if (!historicalResponse.ok) {
-			console.warn('[PE Ratio] Failed to fetch historical fundamentals:', historicalResponse.status);
-			this.peRatioHistory = null;
-			return;
-		}
-		
-		const historicalData = await historicalResponse.json();
-		
-		// Get metrics object
-		let metricsObj = null;
-		if (Array.isArray(historicalData)) {
-			const metricsItem = historicalData.find(item => item && item.metrics);
-			if (metricsItem) {
-				metricsObj = metricsItem.metrics;
-			} else if (historicalData[0] && typeof historicalData[0] === 'object') {
-				metricsObj = historicalData[0].metrics;
+
+			// Now fetch historical fundamentals to calculate PE ratio from EPS and price
+			const historicalResponse = await fetch(`${API_BASE_URL}/api/fundamentals/historical/${this.symbol}`);
+			if (!historicalResponse.ok) {
+				console.warn('[PE Ratio] Failed to fetch historical fundamentals:', historicalResponse.status);
+				this.peRatioHistory = null;
+				return;
 			}
-		} else if (historicalData && typeof historicalData === 'object') {
-			metricsObj = historicalData.metrics;
-		}
-		
-		if (!metricsObj || typeof metricsObj !== 'object' || Array.isArray(metricsObj)) {
-			console.warn('[PE Ratio] No metrics object found');
-			this.peRatioHistory = null;
-			return;
-		}
-		
-		// Get EPS data (earnings per share) - we'll use this to calculate PE ratio
-		let epsSeries = null;
-		if (metricsObj.eps) {
-			epsSeries = metricsObj.eps;
-			console.log('[PE Ratio] Found EPS data');
-		} else {
-			console.warn('[PE Ratio] No EPS data found. Available metrics:', Object.keys(metricsObj));
-			this.peRatioHistory = null;
-			return;
-		}
-		
-		// Get EPS data points (prefer quarterly for smoothing, fallback to annual)
-		let epsData = [];
-		if (epsSeries.quarterly && epsSeries.quarterly.length > 0) {
-			epsData = epsSeries.quarterly.map(item => ({
-				date: item.period || item.date || item.year,
-				eps: item.v !== undefined ? item.v : (item.value !== undefined ? item.value : null)
-			})).filter(item => item.eps && item.eps > 0 && isFinite(item.eps) && item.date)
-			  .sort((a, b) => new Date(a.date) - new Date(b.date));
-			console.log(`[PE Ratio] Loaded ${epsData.length} quarterly EPS data points`);
-		} else if (epsSeries.annual && epsSeries.annual.length > 0) {
-			epsData = epsSeries.annual.map(item => ({
-				date: item.period || item.date || item.year,
-				eps: item.v !== undefined ? item.v : (item.value !== undefined ? item.value : null)
-			})).filter(item => item.eps && item.eps > 0 && isFinite(item.eps) && item.date)
-			  .sort((a, b) => new Date(a.date) - new Date(b.date));
-			console.log(`[PE Ratio] Loaded ${epsData.length} annual EPS data points`);
-		}
-		
-		if (epsData.length === 0) {
-			console.warn('[PE Ratio] No valid EPS data found');
-			this.peRatioHistory = null;
-			return;
-		}
-		
-		// Store EPS data for later calculation
-		this.peRatioHistory = epsData;
-		
-		console.log(`[PE Ratio] Prepared ${this.peRatioHistory.length} EPS data points for PE ratio calculation`);
+
+			const historicalData = await historicalResponse.json();
+
+			// Get metrics object
+			let metricsObj = null;
+			if (Array.isArray(historicalData)) {
+				const metricsItem = historicalData.find(item => item && item.metrics);
+				if (metricsItem) {
+					metricsObj = metricsItem.metrics;
+				} else if (historicalData[0] && typeof historicalData[0] === 'object') {
+					metricsObj = historicalData[0].metrics;
+				}
+			} else if (historicalData && typeof historicalData === 'object') {
+				metricsObj = historicalData.metrics;
+			}
+
+			if (!metricsObj || typeof metricsObj !== 'object' || Array.isArray(metricsObj)) {
+				console.warn('[PE Ratio] No metrics object found');
+				this.peRatioHistory = null;
+				return;
+			}
+
+			// Get EPS data (earnings per share) - we'll use this to calculate PE ratio
+			let epsSeries = null;
+			if (metricsObj.eps) {
+				epsSeries = metricsObj.eps;
+				console.log('[PE Ratio] Found EPS data');
+			} else {
+				console.warn('[PE Ratio] No EPS data found. Available metrics:', Object.keys(metricsObj));
+				this.peRatioHistory = null;
+				return;
+			}
+
+			// Get EPS data points (prefer quarterly for smoothing, fallback to annual)
+			let epsData = [];
+			if (epsSeries.quarterly && epsSeries.quarterly.length > 0) {
+				epsData = epsSeries.quarterly.map(item => ({
+					date: item.period || item.date || item.year,
+					eps: item.v !== undefined ? item.v : (item.value !== undefined ? item.value : null)
+				})).filter(item => item.eps && item.eps > 0 && isFinite(item.eps) && item.date)
+					.sort((a, b) => new Date(a.date) - new Date(b.date));
+				console.log(`[PE Ratio] Loaded ${epsData.length} quarterly EPS data points`);
+			} else if (epsSeries.annual && epsSeries.annual.length > 0) {
+				epsData = epsSeries.annual.map(item => ({
+					date: item.period || item.date || item.year,
+					eps: item.v !== undefined ? item.v : (item.value !== undefined ? item.value : null)
+				})).filter(item => item.eps && item.eps > 0 && isFinite(item.eps) && item.date)
+					.sort((a, b) => new Date(a.date) - new Date(b.date));
+				console.log(`[PE Ratio] Loaded ${epsData.length} annual EPS data points`);
+			}
+
+			if (epsData.length === 0) {
+				console.warn('[PE Ratio] No valid EPS data found');
+				this.peRatioHistory = null;
+				return;
+			}
+
+			// Store EPS data for later calculation
+			this.peRatioHistory = epsData;
+
+			console.log(`[PE Ratio] Prepared ${this.peRatioHistory.length} EPS data points for PE ratio calculation`);
 		} catch (error) {
 			console.error('[PE Ratio] Error loading PE ratio:', error);
 			this.peRatio = null;
 			this.peRatioHistory = null;
 		}
 	}
-	
+
 	async loadNeutralValueData() {
 		// Load last 30 years of data for static exponential regression
 		// The neutral value will only be calculated for dates within or after this 30-year window
 		try {
 			// Fetch maximum available data
 			const historicalData = await this.fetchYahooFinanceData(this.symbol, 'max', false);
-			
+
 			if (!historicalData || historicalData.length === 0) {
 				console.warn('[Neutral Value] No historical data available');
 				this.neutralValueData = null;
 				return;
 			}
-			
+
 			// Take last 30 years worth of data (approximately 30 * 252 = 7560 trading days)
 			// But use all available data if less than 30 years
 			const maxDays = 30 * 252; // ~30 years of trading days
-			const dataToUse = historicalData.length > maxDays 
-				? historicalData.slice(-maxDays) 
+			const dataToUse = historicalData.length > maxDays
+				? historicalData.slice(-maxDays)
 				: historicalData;
-			
+
 			// Extract dates and prices for regression
 			const dates = dataToUse.map(d => new Date(d.date).getTime());
 			const prices = dataToUse.map(d => d.close);
-			
+
 			// Filter out invalid data
 			const validData = [];
 			for (let i = 0; i < dates.length; i++) {
@@ -2356,25 +2357,25 @@ export class StockChart extends HTMLElement {
 					});
 				}
 			}
-			
+
 			if (validData.length < 10) {
 				console.warn('[Neutral Value] Not enough valid data points for regression');
 				this.neutralValueData = null;
 				return;
 			}
-			
+
 			// Ensure data is sorted by date (chronologically)
 			validData.sort((a, b) => a.date - b.date);
-			
+
 			// Store the date range of the regression window (using validData, not dataToUse)
 			// windowStart is the first date of the valid data used for regression
 			const windowStart = validData[0].date;
 			const windowEnd = validData[validData.length - 1].date;
-			
+
 			// Perform exponential regression: y = a * e^(b*x)
 			// Linearize: log(P_t) = log(a) + b*t
 			const regression = this.exponentialRegression(validData);
-			
+
 			if (regression) {
 				// Store the regression with window boundaries
 				// Neutral value will only be calculated for dates >= windowStart
@@ -2395,18 +2396,18 @@ export class StockChart extends HTMLElement {
 			this.neutralValueData = null;
 		}
 	}
-	
+
 	calculateATR(period = 14) {
 		if (!this.chartData || this.chartData.length < period + 1) {
 			return null;
 		}
-		
+
 		const trueRanges = [];
 		for (let i = 1; i < this.chartData.length; i++) {
 			const high = this.chartData[i].high || this.chartData[i].close;
 			const low = this.chartData[i].low || this.chartData[i].close;
 			const prevClose = this.chartData[i - 1].close;
-			
+
 			const tr = Math.max(
 				high - low,
 				Math.abs(high - prevClose),
@@ -2414,57 +2415,57 @@ export class StockChart extends HTMLElement {
 			);
 			trueRanges.push(tr);
 		}
-		
+
 		// Calculate ATR as SMA of true ranges
 		if (trueRanges.length < period) return null;
-		
+
 		const atrValues = [];
 		for (let i = period - 1; i < trueRanges.length; i++) {
 			const sum = trueRanges.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
 			atrValues.push(sum / period);
 		}
-		
+
 		// Return current ATR and median ATR
 		const currentATR = atrValues[atrValues.length - 1];
 		const sortedATR = [...atrValues].sort((a, b) => a - b);
 		const medianATR = sortedATR[Math.floor(sortedATR.length / 2)];
-		
+
 		return { current: currentATR, median: medianATR, values: atrValues };
 	}
-	
+
 	checkTrendFilter() {
 		// Check if price is above 200-DMA or 200-DMA is flattening (not in steep downtrend)
 		// If insufficient data, allow tranches but show warning
 		if (!this.historicalData || this.historicalData.length < 200) {
 			return { active: true, reason: 'Insufficient data for 200-DMA - trend filter bypassed', warning: true };
 		}
-		
+
 		const ma200Values = this.calculateMAForCurrentValues(200);
 		if (!ma200Values || ma200Values.length < 10) {
 			return { active: true, reason: 'Cannot calculate 200-DMA - trend filter bypassed', warning: true };
 		}
-		
+
 		const currentMA200 = ma200Values[ma200Values.length - 1];
 		const prices = this.chartData.map(d => d.close);
 		const currentPrice = prices[prices.length - 1];
-		
+
 		// Check if price is above 200-DMA
 		const priceAboveMA = currentPrice > currentMA200;
-		
+
 		// Check if 200-DMA is flattening (slope of last 20 periods)
 		const recentMA200 = ma200Values.slice(-20);
 		if (recentMA200.length >= 2) {
 			const ma200Slope = (recentMA200[recentMA200.length - 1] - recentMA200[0]) / recentMA200[0];
 			const isFlattening = ma200Slope > -0.02; // Less than 2% decline over 20 periods
-			
+
 			if (priceAboveMA || isFlattening) {
 				return { active: true, reason: priceAboveMA ? 'Price above 200-DMA' : '200-DMA flattening', warning: false };
 			}
 		}
-		
+
 		return { active: false, reason: 'Trend filter not met: price below 200-DMA and steep downtrend' };
 	}
-	
+
 	checkConfirmationTriggers(trancheLevel) {
 		// Optional: Check for confirmation signals before entry
 		// Returns object with confirmation status and signals
@@ -2472,30 +2473,30 @@ export class StockChart extends HTMLElement {
 		if (!this.chartData || this.chartData.length < 10) {
 			return { confirmed: false, signals: [] };
 		}
-		
+
 		const recentData = this.chartData.slice(-10); // Last 10 periods (reduced from 14)
 		const prices = recentData.map(d => d.close);
 		const highs = recentData.map(d => d.high || d.close);
 		const lows = recentData.map(d => d.low || d.close);
 		const volumes = recentData.map(d => d.volume || 0);
-		
+
 		const currentPrice = prices[prices.length - 1];
 		const prevPrice = prices[prices.length - 2];
 		const prev2Price = prices[prices.length - 3];
-		
+
 		const signals = [];
-		
+
 		// 1. Reversal Candle: Check if current candle shows reversal pattern
 		const currentHigh = highs[highs.length - 1];
 		const currentLow = lows[lows.length - 1];
 		const prevHigh = highs[highs.length - 2];
 		const prevLow = lows[lows.length - 2];
-		
+
 		// Bullish reversal: price touched tranche level and closed higher
 		if (currentLow <= trancheLevel * 1.01 && currentPrice > prevPrice && currentPrice > (currentHigh + currentLow) / 2) {
 			signals.push('Reversal Candle');
 		}
-		
+
 		// 2. RSI < 40 and turning up (optimized: use only available data)
 		if (prices.length >= 7) {
 			// Simplified RSI calculation using available data (minimum 7 periods)
@@ -2512,26 +2513,26 @@ export class StockChart extends HTMLElement {
 					losses.push(Math.abs(change));
 				}
 			}
-			
+
 			if (gains.length >= rsiPeriod) {
 				const avgGain = gains.slice(-rsiPeriod).reduce((a, b) => a + b, 0) / rsiPeriod;
 				const avgLoss = losses.slice(-rsiPeriod).reduce((a, b) => a + b, 0) / rsiPeriod;
-				
+
 				if (avgLoss > 0) {
 					const rs = avgGain / avgLoss;
 					const rsi = 100 - (100 / (1 + rs));
-					
+
 					// Calculate previous RSI if enough data
 					if (gains.length >= rsiPeriod + 1) {
 						const prevGains = gains.slice(-rsiPeriod - 1, -1);
 						const prevLosses = losses.slice(-rsiPeriod - 1, -1);
 						const prevAvgGain = prevGains.reduce((a, b) => a + b, 0) / rsiPeriod;
 						const prevAvgLoss = prevLosses.reduce((a, b) => a + b, 0) / rsiPeriod;
-						
+
 						if (prevAvgLoss > 0) {
 							const prevRS = prevAvgGain / prevAvgLoss;
 							const prevRSI = 100 - (100 / (1 + prevRS));
-							
+
 							if (rsi < 40 && rsi > prevRSI) {
 								signals.push('RSI Turning Up');
 							}
@@ -2540,30 +2541,30 @@ export class StockChart extends HTMLElement {
 				}
 			}
 		}
-		
+
 		// 3. Volume Spike: Check if volume is above average near tranche level (optimized)
 		if (volumes.length >= 5 && volumes[volumes.length - 1] > 0) {
 			const avgVolume = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
 			const currentVolume = volumes[volumes.length - 1];
-			
+
 			if (currentVolume > avgVolume * 1.5 && Math.abs(currentPrice - trancheLevel) / trancheLevel < 0.02) {
 				signals.push('Volume Spike');
 			}
 		}
-		
+
 		return {
 			confirmed: signals.length > 0,
 			signals: signals
 		};
 	}
-	
+
 	async calculateTrancheStrategy() {
 		if (!this.chartData || this.chartData.length === 0) {
 			console.warn('[3-Tranche] No chart data available');
 			this.trancheLevels = null;
 			return;
 		}
-		
+
 		try {
 			// Get price data from current timeframe
 			if (!this.chartData || this.chartData.length === 0) {
@@ -2571,60 +2572,60 @@ export class StockChart extends HTMLElement {
 				this.trancheLevels = null;
 				return;
 			}
-			
+
 			const prices = this.chartData.map(d => d.close).filter(p => p !== null && p !== undefined && isFinite(p));
 			if (prices.length === 0) {
 				console.warn('[3-Tranche] No valid price data');
 				this.trancheLevels = null;
 				return;
 			}
-			
+
 			const currentPrice = prices[prices.length - 1];
 			if (!currentPrice || !isFinite(currentPrice)) {
 				console.warn('[3-Tranche] Invalid current price');
 				this.trancheLevels = null;
 				return;
 			}
-			
+
 			// Use the high/low from the current timeframe (not always 52 weeks)
 			const timeframeHigh = Math.max(...prices);
 			const timeframeLow = Math.min(...prices);
 			const timeframeRange = timeframeHigh - timeframeLow;
-			
+
 			if (!isFinite(timeframeHigh) || !isFinite(timeframeLow) || !isFinite(timeframeRange) || timeframeRange <= 0) {
 				console.warn('[3-Tranche] Invalid price range');
 				this.trancheLevels = null;
 				return;
 			}
-			
+
 			// For display purposes, keep the old variable names but use timeframe data
 			const high52w = timeframeHigh;
 			const low52w = timeframeLow;
 			const range52w = timeframeRange;
-			
+
 			// Trend filter removed - tranches are always active
-			
+
 			// Calculate ATR for volatility adjustment
 			const atrData = this.calculateATR(14);
 			const currentATR = atrData ? atrData.current : null;
 			const medianATR = atrData ? atrData.median : null;
-			
+
 			// Determine if this is a short timeframe (needs adjusted ATR multiplier)
 			const isShortTimeframe = ['1mo', '3mo'].includes(this.timeframe);
 			const isVeryShortTimeframe = ['1d', '5d', '1w'].includes(this.timeframe);
-			
+
 			// Use Fibonacci retracements for all timeframes
 			// Base Fibonacci retracements from high to low of timeframe
 			const baseFib382 = high52w - (range52w * 0.382);
 			const baseFib500 = high52w - (range52w * 0.500);
 			const baseFib618 = high52w - (range52w * 0.618);
-			
+
 			let tranche1, tranche2, tranche3;
-			
+
 			if (currentATR && medianATR && medianATR > 0) {
 				// Volatility adjustment factor (ATR ratio)
 				const volAdjustment = currentATR / medianATR;
-				
+
 				// Adjust ATR multiplier based on timeframe
 				// Very short timeframes: smaller ATR adjustment to keep tranches closer together
 				// Longer timeframes: full ATR adjustment
@@ -2636,7 +2637,7 @@ export class StockChart extends HTMLElement {
 				} else {
 					atrMultiplier = 1.0; // Full adjustment for longer timeframes
 				}
-				
+
 				// ATR-adjusted Fibonacci retracements
 				// Tranche 1: 0.5 × ATR below base Fib 38.2%
 				// Tranche 2: 1.0 × ATR below base Fib 50%
@@ -2650,54 +2651,54 @@ export class StockChart extends HTMLElement {
 				tranche2 = baseFib500;
 				tranche3 = baseFib618;
 			}
-			
+
 			// Ensure all levels are below current price and above timeframe low
 			// For shorter timeframes, adjust the constraints to keep all tranches visible
 			const priceRange = timeframeHigh - timeframeLow;
-			
+
 			// Safety check: if price range is too small or zero, use fallback values
 			if (priceRange <= 0 || !isFinite(priceRange)) {
 				console.warn('[3-Tranche] Invalid price range, using fallback');
 				this.trancheLevels = null;
 				return;
 			}
-			
+
 			// Adjust minimum distance based on timeframe (smaller for short timeframes)
 			const minDistance = isShortTimeframe ? priceRange * 0.02 : priceRange * 0.05; // 2% for short, 5% for longer
 			const minFromLow = isShortTimeframe ? priceRange * 0.01 : priceRange * 0.02; // 1% for short, 2% for longer
-			
+
 			// Calculate raw levels first
 			let rawLevels = [tranche1, tranche2, tranche3]
 				.map(level => Math.max(Math.min(level, currentPrice * 0.99), timeframeLow + minFromLow))
 				.sort((a, b) => b - a); // Descending order
-			
+
 			// Ensure minimum spacing between tranches and that all are visible
 			const levels = [];
 			for (let i = 0; i < rawLevels.length; i++) {
 				let level = rawLevels[i];
-				
+
 				// Ensure it's below current price
 				level = Math.min(level, currentPrice * 0.99);
-				
+
 				// Ensure it's above the low
 				level = Math.max(level, timeframeLow + minFromLow);
-				
+
 				// Ensure minimum distance from previous tranche (if exists)
 				if (i > 0 && levels[i - 1] - level < minDistance) {
 					level = levels[i - 1] - minDistance;
 				}
-				
+
 				// Final check: ensure it's still within bounds
 				level = Math.max(Math.min(level, currentPrice * 0.99), timeframeLow + minFromLow);
-				
+
 				levels.push(level);
 			}
-			
+
 			// If any level is too close to the low or outside visible range, adjust all levels proportionally
 			const minVisibleLevel = timeframeLow + minFromLow;
 			const maxVisibleLevel = currentPrice * 0.99;
 			const availableRange = maxVisibleLevel - minVisibleLevel;
-			
+
 			// Safety check: ensure available range is valid
 			if (availableRange <= 0 || !isFinite(availableRange) || minVisibleLevel >= maxVisibleLevel) {
 				console.warn('[3-Tranche] Invalid available range, using fallback distribution');
@@ -2715,7 +2716,7 @@ export class StockChart extends HTMLElement {
 				const lowestLevel = Math.min(...levels);
 				const highestLevel = Math.max(...levels);
 				const neededRange = highestLevel - lowestLevel;
-				
+
 				if (neededRange > availableRange || lowestLevel < minVisibleLevel) {
 					// Need to compress or shift all levels
 					// Distribute levels evenly across available range
@@ -2723,14 +2724,14 @@ export class StockChart extends HTMLElement {
 					levels[0] = maxVisibleLevel - spacing * 0; // Highest tranche
 					levels[1] = maxVisibleLevel - spacing * 1; // Middle tranche
 					levels[2] = maxVisibleLevel - spacing * 2; // Lowest tranche
-					
+
 					// Ensure lowest is still above minimum
 					if (levels[2] < minVisibleLevel) {
 						const adjustment = minVisibleLevel - levels[2];
 						levels[0] += adjustment;
 						levels[1] += adjustment;
 						levels[2] += adjustment;
-						
+
 						// Ensure highest is still below maximum
 						if (levels[0] > maxVisibleLevel) {
 							const overage = levels[0] - maxVisibleLevel;
@@ -2741,21 +2742,21 @@ export class StockChart extends HTMLElement {
 					}
 				}
 			}
-			
+
 			// Upgrade 3: Weightings (20/30/50)
 			const weights = {
 				tranche1: 0.20, // 20%
 				tranche2: 0.30, // 30%
 				tranche3: 0.50  // 50%
 			};
-			
+
 			// Safety check: ensure all levels are valid numbers
 			if (!levels || levels.length !== 3 || !levels.every(l => l !== null && l !== undefined && isFinite(l))) {
 				console.warn('[3-Tranche] Invalid levels calculated:', levels);
 				this.trancheLevels = null;
 				return;
 			}
-			
+
 			// Upgrade 4: Confirmation Triggers (optional) - calculate asynchronously after displaying tranches
 			// First, display tranches immediately with empty confirmations
 			this.trancheLevels = {
@@ -2774,12 +2775,12 @@ export class StockChart extends HTMLElement {
 				atr: currentATR,
 				volAdjusted: !!currentATR
 			};
-			
+
 			console.log('[3-Tranche] Calculated levels:', this.trancheLevels);
-			
+
 			// Update chart immediately with tranches
 			this.updateChart();
-			
+
 			// Calculate confirmation triggers asynchronously (non-blocking)
 			setTimeout(() => {
 				try {
@@ -2788,7 +2789,7 @@ export class StockChart extends HTMLElement {
 						tranche2: this.checkConfirmationTriggers(levels[1]),
 						tranche3: this.checkConfirmationTriggers(levels[2])
 					};
-					
+
 					// Update trancheLevels with confirmations
 					if (this.trancheLevels) {
 						this.trancheLevels.confirmations = confirmations;
@@ -2803,22 +2804,22 @@ export class StockChart extends HTMLElement {
 			this.trancheLevels = null;
 		}
 	}
-	
+
 	identifySupportLevels(prices, windowSize = 30) {
 		const supportLevels = [];
 		const tolerance = 0.02; // 2% tolerance for support level matching
-		
+
 		// Find local minima with a larger window
 		for (let i = windowSize; i < prices.length - windowSize; i++) {
 			const window = prices.slice(i - windowSize, i + windowSize);
 			const localMin = Math.min(...window);
-			
+
 			// Check if current price is near the local minimum
 			if (Math.abs(prices[i] - localMin) / localMin < tolerance) {
 				// Check how many times price touched or bounced from this level
 				let touchCount = 0;
 				const levelTolerance = localMin * tolerance;
-				
+
 				// Check in a wider window (3x) for bounces
 				const wideWindow = prices.slice(Math.max(0, i - windowSize * 3), Math.min(prices.length, i + windowSize * 3));
 				for (let j = 0; j < wideWindow.length; j++) {
@@ -2826,7 +2827,7 @@ export class StockChart extends HTMLElement {
 						touchCount++;
 					}
 				}
-				
+
 				// Only consider significant support levels (touched at least 3 times)
 				if (touchCount >= 3) {
 					supportLevels.push({
@@ -2837,7 +2838,7 @@ export class StockChart extends HTMLElement {
 				}
 			}
 		}
-		
+
 		// Group similar support levels and keep the strongest
 		const grouped = [];
 		supportLevels.forEach(level => {
@@ -2856,32 +2857,32 @@ export class StockChart extends HTMLElement {
 				grouped.push(level);
 			}
 		});
-		
+
 		// Return sorted by price (descending) and filter out levels that are too close
 		const sorted = grouped.sort((a, b) => b.price - a.price);
 		const filtered = [];
 		sorted.forEach(level => {
-			if (filtered.length === 0 || 
+			if (filtered.length === 0 ||
 				Math.abs(filtered[filtered.length - 1].price - level.price) / level.price > 0.05) {
 				filtered.push(level);
 			}
 		});
-		
+
 		return filtered.map(l => l.price);
 	}
-	
+
 	exponentialRegression(data) {
 		// Exponential regression: y = a * e^(b*x)
 		// Linearize: ln(y) = ln(a) + b*x
 		// x = time (days since first date), y = price
-		
+
 		if (data.length < 2) return null;
-		
+
 		// Normalize dates to start from 0
 		const firstDate = data[0].date;
 		const xValues = data.map(d => (d.date - firstDate) / (1000 * 60 * 60 * 24)); // Convert to days
 		const yValues = data.map(d => d.price);
-		
+
 		// Filter out non-positive values for logarithm
 		const validIndices = [];
 		for (let i = 0; i < yValues.length; i++) {
@@ -2889,26 +2890,26 @@ export class StockChart extends HTMLElement {
 				validIndices.push(i);
 			}
 		}
-		
+
 		if (validIndices.length < 2) return null;
-		
+
 		const validX = validIndices.map(i => xValues[i]);
 		const validY = validIndices.map(i => Math.log(yValues[i])); // ln(y)
-		
+
 		// Linear regression: ln(y) = ln(a) + b*x
 		const n = validX.length;
 		const sumX = validX.reduce((a, b) => a + b, 0);
 		const sumY = validY.reduce((a, b) => a + b, 0);
 		const sumXY = validX.reduce((sum, x, i) => sum + x * validY[i], 0);
 		const sumX2 = validX.reduce((sum, x) => sum + x * x, 0);
-		
+
 		const denominator = n * sumX2 - sumX * sumX;
 		if (Math.abs(denominator) < 1e-10) return null;
-		
+
 		const b = (n * sumXY - sumX * sumY) / denominator;
 		const lnA = (sumY - b * sumX) / n;
 		const a = Math.exp(lnA);
-		
+
 		// Calculate log-residuals: ε_t = log(P_t) - log(P̂_t)
 		// This is the statistically correct approach for exponential regression
 		const logResiduals = [];
@@ -2921,12 +2922,12 @@ export class StockChart extends HTMLElement {
 				logResiduals.push(logResidual);
 			}
 		}
-		
+
 		// Calculate standard deviation in log-space: σ_log = std(ε_t)
 		const meanLogResidual = logResiduals.reduce((a, b) => a + b, 0) / logResiduals.length;
 		const variance = logResiduals.reduce((sum, r) => sum + Math.pow(r - meanLogResidual, 2), 0) / logResiduals.length;
 		const sigmaLog = Math.sqrt(variance);
-		
+
 		return {
 			a: a,
 			b: b,
@@ -2935,15 +2936,15 @@ export class StockChart extends HTMLElement {
 			equation: (x) => a * Math.exp(b * x) // x in days since firstDate
 		};
 	}
-	
+
 	calculateNeutralValueForTimeframe(currentCloses, currentLabels) {
 		if (!this.neutralValueData || !currentLabels || currentLabels.length === 0) {
 			return currentCloses.map(() => null);
 		}
-		
+
 		const { equation, firstDate, windowStart } = this.neutralValueData;
 		const neutralValues = [];
-		
+
 		for (let i = 0; i < currentLabels.length; i++) {
 			try {
 				// Parse the date from the label
@@ -2955,14 +2956,14 @@ export class StockChart extends HTMLElement {
 					// Date-only format (YYYY-MM-DD)
 					date = new Date(currentLabels[i] + 'T00:00:00');
 				}
-				
+
 				if (isNaN(date.getTime())) {
 					neutralValues.push(null);
 					continue;
 				}
-				
+
 				const dateTime = date.getTime();
-				
+
 				// Only calculate neutral value for dates >= windowStart
 				// The regression is based on the last 30 years, so values before windowStart don't exist
 				// windowStart is a timestamp (number), so we can compare directly
@@ -2971,7 +2972,7 @@ export class StockChart extends HTMLElement {
 					neutralValues.push(null);
 					continue;
 				}
-				
+
 				// Debug: Log if we're calculating for dates before windowStart (should not happen)
 				if (i === 0 || i === currentLabels.length - 1) {
 					const windowStartDate = new Date(windowStart);
@@ -2980,14 +2981,14 @@ export class StockChart extends HTMLElement {
 						console.warn(`[Neutral Value] Date ${currentDate.toISOString().split('T')[0]} is before window start ${windowStartDate.toISOString().split('T')[0]}`);
 					}
 				}
-				
+
 				// Calculate days since first date (of regression window)
 				const daysSinceFirst = (dateTime - firstDate) / (1000 * 60 * 60 * 24);
-				
+
 				// Calculate neutral value using exponential function
 				// P̂(t) = e^(a + b*t) where a = log(a), b = b, t = days since first date
 				const neutralValue = equation(daysSinceFirst);
-				
+
 				// Only include if value is positive and reasonable
 				if (neutralValue > 0 && isFinite(neutralValue)) {
 					neutralValues.push(neutralValue);
@@ -2999,55 +3000,55 @@ export class StockChart extends HTMLElement {
 				neutralValues.push(null);
 			}
 		}
-		
+
 		return neutralValues;
 	}
-	
+
 	setStatus(message) {
 		const statusEl = this.shadowRoot.getElementById('status');
 		statusEl.textContent = message;
 		statusEl.style.display = message ? 'block' : 'none';
 	}
-	
+
 	updateNeutralValueWarning(show) {
 		const warningEl = this.shadowRoot.getElementById('neutral-value-warning');
 		if (warningEl) {
 			warningEl.style.display = show ? 'inline-block' : 'none';
 		}
 	}
-	
+
 	// Black-Scholes Gamma calculation
 	calculateGamma(S, K, T, r, sigma, optionType) {
 		// S = spot price, K = strike, T = time to expiration (years), r = risk-free rate, sigma = IV
 		if (T <= 0 || sigma <= 0 || S <= 0) return 0;
-		
+
 		const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
 		const gamma = Math.exp(-0.5 * d1 * d1) / (S * sigma * Math.sqrt(T) * Math.sqrt(2 * Math.PI));
-		
+
 		return gamma;
 	}
-	
+
 	// Calculate Gamma Exposure (GEX)
 	calculateGEX(gamma, openInterest, spotPrice, contractMultiplier = 100) {
 		// GEX ≈ Gamma × OI × Spot² × ContractMultiplier
 		return gamma * openInterest * spotPrice * spotPrice * contractMultiplier;
 	}
-	
+
 	async loadGammaHeatmapData() {
 		if (!this.symbol) {
 			console.warn('[Gamma Heatmap] No symbol available');
 			return;
 		}
-		
+
 		this.setStatus('Loading options chain...');
 		try {
 			console.log(`[Gamma Heatmap] Loading options for ${this.symbol}`);
-			
+
 			// Fetch options chain from Yahoo Finance (via proxy utility which tries backend first)
 			const optionsUrl = `https://query1.finance.yahoo.com/v7/finance/options/${this.symbol}`;
 			const { fetchWithProxy } = await import('../utils/proxy.js');
 			const response = await fetchWithProxy(optionsUrl);
-			
+
 			console.log('[Gamma Heatmap] Options response structure:', {
 				hasResponse: !!response,
 				hasOptionChain: !!response?.optionChain,
@@ -3055,18 +3056,18 @@ export class StockChart extends HTMLElement {
 				resultLength: response?.optionChain?.result?.length || 0,
 				responseKeys: response ? Object.keys(response) : []
 			});
-			
+
 			// Check for error in response
 			if (response?.finance?.error) {
 				const error = response.finance.error;
 				console.error('[Gamma Heatmap] Yahoo Finance API error:', error);
-				
+
 				if (error.code === 'Unauthorized' || error.description?.includes('Invalid Crumb')) {
 					throw new Error('Yahoo Finance API requires authentication. Please ensure the Node.js backend server is running on port 3000.');
 				}
 				throw new Error(`Yahoo Finance API error: ${error.description || error.code}`);
 			}
-			
+
 			// Handle different response structures
 			let optionChain;
 			if (response?.optionChain?.result && response.optionChain.result.length > 0) {
@@ -3082,31 +3083,31 @@ export class StockChart extends HTMLElement {
 				console.error('[Gamma Heatmap] Invalid response structure:', JSON.stringify(response, null, 2).substring(0, 500));
 				throw new Error('No options data available - invalid response structure. Please ensure the Node.js backend server is running.');
 			}
-			
+
 			if (!optionChain) {
 				console.error('[Gamma Heatmap] optionChain is null/undefined');
 				throw new Error('No options data available');
 			}
-			
+
 			console.log('[Gamma Heatmap] Parsed optionChain keys:', Object.keys(optionChain));
 			console.log('[Gamma Heatmap] Full optionChain structure:', JSON.stringify(optionChain, null, 2).substring(0, 1000));
-			
+
 			// Try multiple ways to get spot price
-			let spotPrice = optionChain.quote?.regularMarketPrice 
-				|| optionChain.quote?.currentPrice 
+			let spotPrice = optionChain.quote?.regularMarketPrice
+				|| optionChain.quote?.currentPrice
 				|| optionChain.quote?.price
 				|| optionChain.regularMarketPrice
 				|| optionChain.currentPrice
 				|| optionChain.price;
-			
+
 			// Fallback: Use current price from chart data if available
 			if (!spotPrice && this.chartData && this.chartData.length > 0) {
 				spotPrice = this.chartData[this.chartData.length - 1].close;
 				console.log(`[Gamma Heatmap] Using spot price from chart data: ${spotPrice}`);
 			}
-			
+
 			const riskFreeRate = 0.05; // Approximate risk-free rate (5%)
-			
+
 			if (!spotPrice) {
 				console.error('[Gamma Heatmap] Could not determine spot price. OptionChain structure:', {
 					hasQuote: !!optionChain.quote,
@@ -3116,25 +3117,25 @@ export class StockChart extends HTMLElement {
 				});
 				throw new Error('Could not determine spot price');
 			}
-			
+
 			console.log(`[Gamma Heatmap] Spot price: ${spotPrice}`);
-			
+
 			// Get current expiration dates
 			const expirationDates = optionChain.expirationDates || optionChain.expirations || [];
 			if (expirationDates.length === 0) {
 				console.error('[Gamma Heatmap] No expiration dates. OptionChain structure:', Object.keys(optionChain));
 				throw new Error('No expiration dates available');
 			}
-			
+
 			// Use nearest expiration (0 DTE) or next expiration
 			const targetExpiration = expirationDates[0];
 			const expirationDate = new Date(targetExpiration * 1000);
 			const now = new Date();
 			const daysToExpiration = (expirationDate - now) / (1000 * 60 * 60 * 24);
 			const timeToExpiration = Math.max(daysToExpiration / 365, 0.001); // Convert to years, minimum 0.001
-			
+
 			console.log(`[Gamma Heatmap] Target expiration: ${expirationDate.toISOString()}, DTE: ${daysToExpiration.toFixed(1)}`);
-			
+
 			// Fetch options for this expiration
 			const optionsUrlWithExp = `https://query1.finance.yahoo.com/v7/finance/options/${this.symbol}?date=${targetExpiration}`;
 			let optionsResponse;
@@ -3145,7 +3146,7 @@ export class StockChart extends HTMLElement {
 				// If we can't fetch specific expiration, try to use data from the initial call
 				optionsResponse = response;
 			}
-			
+
 			// Handle different response structures
 			let optionsData;
 			if (optionsResponse?.optionChain?.result && optionsResponse.optionChain.result.length > 0) {
@@ -3159,13 +3160,13 @@ export class StockChart extends HTMLElement {
 			} else {
 				throw new Error('No options data for expiration');
 			}
-			
+
 			console.log('[Gamma Heatmap] Options data keys:', Object.keys(optionsData));
-			
+
 			// Extract calls and puts - handle different structures
 			let calls = [];
 			let puts = [];
-			
+
 			if (optionsData.options && optionsData.options[0]) {
 				calls = optionsData.options[0].calls || [];
 				puts = optionsData.options[0].puts || [];
@@ -3193,9 +3194,9 @@ export class StockChart extends HTMLElement {
 					puts = nested.puts;
 				}
 			}
-			
+
 			console.log(`[Gamma Heatmap] Found ${calls.length} calls and ${puts.length} puts`);
-			
+
 			if (calls.length === 0 && puts.length === 0) {
 				console.error('[Gamma Heatmap] No calls or puts found. OptionsData structure:', {
 					keys: Object.keys(optionsData),
@@ -3207,66 +3208,66 @@ export class StockChart extends HTMLElement {
 				});
 				throw new Error('No calls or puts data found in options response');
 			}
-			
+
 			// Process options and calculate GEX
 			const gammaData = [];
 			let maxCallGEX = 0;
 			let maxPutGEX = 0;
 			let callWallStrike = null;
 			let putWallStrike = null;
-			
+
 			// Process calls
 			for (const call of calls) {
 				if (!call.strike || !call.openInterest || !call.impliedVolatility) continue;
-				
+
 				const strike = call.strike;
 				const openInterest = call.openInterest;
 				const iv = call.impliedVolatility / 100; // Convert percentage to decimal
-				
+
 				const gamma = this.calculateGamma(spotPrice, strike, timeToExpiration, riskFreeRate, iv, 'call');
 				const gex = this.calculateGEX(gamma, openInterest, spotPrice);
-				
+
 				gammaData.push({
 					strike: strike,
 					gex: gex,
 					type: 'call',
 					openInterest: openInterest
 				});
-				
+
 				if (gex > maxCallGEX) {
 					maxCallGEX = gex;
 					callWallStrike = strike;
 				}
 			}
-			
+
 			// Process puts (GEX is negative for puts)
 			for (const put of puts) {
 				if (!put.strike || !put.openInterest || !put.impliedVolatility) continue;
-				
+
 				const strike = put.strike;
 				const openInterest = put.openInterest;
 				const iv = put.impliedVolatility / 100; // Convert percentage to decimal
-				
+
 				const gamma = this.calculateGamma(spotPrice, strike, timeToExpiration, riskFreeRate, iv, 'put');
 				const gex = -this.calculateGEX(gamma, openInterest, spotPrice); // Negative for puts
-				
+
 				gammaData.push({
 					strike: strike,
 					gex: gex,
 					type: 'put',
 					openInterest: openInterest
 				});
-				
+
 				if (Math.abs(gex) > Math.abs(maxPutGEX)) {
 					maxPutGEX = gex;
 					putWallStrike = strike;
 				}
 			}
-			
+
 			if (gammaData.length === 0) {
 				throw new Error('No valid options data found');
 			}
-			
+
 			this.gammaData = {
 				data: gammaData,
 				spotPrice: spotPrice,
@@ -3275,28 +3276,28 @@ export class StockChart extends HTMLElement {
 				expirationDate: expirationDate,
 				daysToExpiration: daysToExpiration
 			};
-			
+
 			this.setStatus('');
 			console.log(`[Gamma Heatmap] Loaded ${gammaData.length} strikes, Call Wall: ${callWallStrike}, Put Wall: ${putWallStrike}`);
 			console.log('[Gamma Heatmap] Gamma data:', this.gammaData);
-			
+
 			// Update chart to show heatmap
 			this.updateChart();
 		} catch (error) {
 			console.error('[Gamma Heatmap] Error loading data:', error);
-			
+
 			let errorMessage = error.message;
 			if (errorMessage.includes('authentication') || errorMessage.includes('Crumb') || errorMessage.includes('backend')) {
 				errorMessage = 'Options data requires the Node.js backend server. Please start it on port 3000.';
 			} else if (errorMessage.includes('not available')) {
 				errorMessage = `Options may not be available for ${this.symbol}. Try a major stock like AAPL, MSFT, or TSLA.`;
 			}
-			
+
 			this.setStatus(`Error loading options data: ${errorMessage}`);
 			this.gammaData = null;
 		}
 	}
-	
+
 	loadWatchlist() {
 		try {
 			const stored = localStorage.getItem('watchlist');
@@ -3305,21 +3306,21 @@ export class StockChart extends HTMLElement {
 			return [];
 		}
 	}
-	
+
 	saveWatchlist(watchlist) {
 		localStorage.setItem('watchlist', JSON.stringify(watchlist));
 	}
-	
+
 	setupWatchlistButton() {
 		const watchlistBtn = this.shadowRoot.getElementById('watchlist-btn');
 		if (!watchlistBtn) return;
-		
+
 		watchlistBtn.addEventListener('click', () => {
 			if (!this.symbol) return;
-			
+
 			const watchlist = this.loadWatchlist();
 			const isInWatchlist = watchlist.includes(this.symbol);
-			
+
 			if (isInWatchlist) {
 				// Remove from watchlist
 				const newWatchlist = watchlist.filter(s => s !== this.symbol);
@@ -3333,14 +3334,14 @@ export class StockChart extends HTMLElement {
 			}
 		});
 	}
-	
+
 	updateWatchlistButton(isAdded) {
 		const watchlistBtn = this.shadowRoot.getElementById('watchlist-btn');
 		const watchlistIcon = this.shadowRoot.getElementById('watchlist-icon');
 		const watchlistText = this.shadowRoot.getElementById('watchlist-text');
-		
+
 		if (!watchlistBtn || !watchlistIcon || !watchlistText) return;
-		
+
 		if (isAdded) {
 			watchlistBtn.classList.add('added');
 			watchlistIcon.textContent = '✓';
@@ -3351,7 +3352,7 @@ export class StockChart extends HTMLElement {
 			watchlistText.textContent = 'Add to watchlist';
 		}
 	}
-	
+
 	checkWatchlistStatus() {
 		if (!this.symbol) {
 			const watchlistBtn = this.shadowRoot.getElementById('watchlist-btn');
@@ -3360,34 +3361,34 @@ export class StockChart extends HTMLElement {
 			}
 			return;
 		}
-		
+
 		const watchlist = this.loadWatchlist();
 		const isInWatchlist = watchlist.includes(this.symbol);
-		
+
 		const watchlistBtn = this.shadowRoot.getElementById('watchlist-btn');
 		if (watchlistBtn) {
 			watchlistBtn.style.display = 'flex';
 			this.updateWatchlistButton(isInWatchlist);
 		}
-		
+
 		// Show AI Summary button
 		const aiSummaryBtn = this.shadowRoot.getElementById('ai-summary-btn');
 		if (aiSummaryBtn) {
 			aiSummaryBtn.style.display = 'flex';
 		}
 	}
-	
+
 	setupAISummaryButton() {
 		const aiSummaryBtn = this.shadowRoot.getElementById('ai-summary-btn');
 		if (!aiSummaryBtn) {
 			console.warn('[AI Summary] Button not found in DOM');
 			return;
 		}
-		
+
 		// Remove any existing event listeners by cloning
 		const newBtn = aiSummaryBtn.cloneNode(true);
 		aiSummaryBtn.parentNode.replaceChild(newBtn, aiSummaryBtn);
-		
+
 		newBtn.addEventListener('click', (e) => {
 			e.preventDefault();
 			e.stopPropagation();
@@ -3398,45 +3399,45 @@ export class StockChart extends HTMLElement {
 			}
 			this.openAISummaryModal();
 		});
-		
+
 		// Show button when symbol is available
 		if (this.symbol) {
 			newBtn.style.display = 'flex';
 			console.log('[AI Summary] Button displayed for symbol:', this.symbol);
 		}
 	}
-	
+
 	async openAISummaryModal() {
 		if (!this.symbol) {
 			console.warn('[AI Summary] No symbol available');
 			return;
 		}
-		
+
 		console.log('[AI Summary] Opening modal for symbol:', this.symbol);
-		
+
 		const overlay = this.shadowRoot.getElementById('ai-summary-modal-overlay');
 		const content = this.shadowRoot.getElementById('ai-summary-modal-content');
 		const closeBtn = this.shadowRoot.getElementById('ai-summary-modal-close');
 		const aiSummaryBtn = this.shadowRoot.getElementById('ai-summary-btn');
-		
+
 		if (!overlay || !content || !closeBtn) {
-			console.error('[AI Summary] Modal elements not found', { 
-				overlay: !!overlay, 
-				content: !!content, 
-				closeBtn: !!closeBtn 
+			console.error('[AI Summary] Modal elements not found', {
+				overlay: !!overlay,
+				content: !!content,
+				closeBtn: !!closeBtn
 			});
 			return;
 		}
-		
+
 		// Show modal
 		overlay.classList.add('show');
 		content.innerHTML = '<div class="ai-summary-loading">Generating AI summary...</div>';
-		
+
 		// Disable button
 		if (aiSummaryBtn) {
 			aiSummaryBtn.disabled = true;
 		}
-		
+
 		// Close button handler
 		const closeModal = () => {
 			overlay.classList.remove('show');
@@ -3444,18 +3445,18 @@ export class StockChart extends HTMLElement {
 				aiSummaryBtn.disabled = false;
 			}
 		};
-		
+
 		closeBtn.onclick = closeModal;
 		overlay.onclick = (e) => {
 			if (e.target === overlay) {
 				closeModal();
 			}
 		};
-		
+
 		// Check cache first
 		const { getCachedData, setCachedData } = await import('../utils/cache.js');
 		const cachedSummary = getCachedData(this.symbol, 'ai-summary');
-		
+
 		if (cachedSummary) {
 			console.log('[AI Summary] Using cached summary');
 			this.displayAISummary(cachedSummary, true);
@@ -3464,19 +3465,23 @@ export class StockChart extends HTMLElement {
 			}
 			return;
 		}
-		
+
 		// Generate AI summary using Gemini API (direct call, same as SWOT analysis)
 		try {
 			// Fetch company information
 			const companyInfo = await this.fetchCompanyInfoForSummary();
-			
+
 			// Generate AI summary using Gemini API
-			const geminiKey = 'AIzaSyCcE73jChTNokgneI8zfy_Z4zGu37JU_3A';
+			const keys = getStorageKeys();
+			const geminiKey = getLocal(keys.GEMINI_KEY);
+			if (!geminiKey) {
+				throw new Error('Gemini API key not configured. Please check your .env file.');
+			}
 			const summary = await this.callGeminiAPIForSummary(geminiKey, this.symbol, companyInfo);
-			
+
 			// Cache the summary
 			setCachedData(this.symbol, 'ai-summary', summary);
-			
+
 			// Display the summary
 			this.displayAISummary(summary, false);
 		} catch (error) {
@@ -3492,7 +3497,7 @@ export class StockChart extends HTMLElement {
 			}
 		}
 	}
-	
+
 	async fetchCompanyInfoForSummary() {
 		try {
 			const response = await fetch(`${API_BASE_URL}/api/fundamentals/${this.symbol}`);
@@ -3500,12 +3505,12 @@ export class StockChart extends HTMLElement {
 				throw new Error(`Failed to fetch company info: ${response.status}`);
 			}
 			const data = await response.json();
-			
+
 			const quoteSummary = data?.quoteSummary?.result?.[0] || {};
 			const profile = quoteSummary.summaryProfile || {};
 			const stats = quoteSummary.defaultKeyStatistics || {};
 			const financial = quoteSummary.financialData || {};
-			
+
 			return {
 				name: profile.longName || profile.name || this.symbol,
 				sector: profile.sector || 'N/A',
@@ -3534,42 +3539,42 @@ export class StockChart extends HTMLElement {
 			};
 		}
 	}
-	
+
 	displayAISummary(summary, fromCache) {
 		const content = this.shadowRoot.getElementById('ai-summary-modal-content');
 		if (!content) return;
-		
+
 		// Format and display the summary with proper heading formatting
 		let formattedSummary = summary;
-		
+
 		// Convert numbered emoji headings (1️⃣, 2️⃣, etc.) to h2 headings FIRST (before other markdown)
 		formattedSummary = formattedSummary.replace(/^(\d+️⃣)\s+(.*)$/gim, '<h2>$2</h2>');
-		
+
 		// Convert Markdown headings (process in order from most specific to least)
 		formattedSummary = formattedSummary.replace(/^### (.*)$/gim, '<h3>$1</h3>');
 		formattedSummary = formattedSummary.replace(/^## (.*)$/gim, '<h2>$1</h2>');
 		formattedSummary = formattedSummary.replace(/^# (.*)$/gim, '<h1>$1</h1>');
-		
+
 		// Convert bold text (**text**) to <strong>
 		formattedSummary = formattedSummary.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-		
+
 		// Convert bullet points (- or *) to proper list items
 		// Only convert lines that start with - or * and are not already HTML
 		formattedSummary = formattedSummary.replace(/^(?![<])([-*])\s+(.*)$/gim, '<li>$2</li>');
-		
+
 		// Wrap consecutive list items in <ul> tags
 		formattedSummary = formattedSummary.replace(/(<li>.*?<\/li>(\n|$))+/g, (match) => {
 			return '<ul>' + match.replace(/\n/g, '') + '</ul>';
 		});
-		
+
 		// Split into lines and process
 		const lines = formattedSummary.split('\n');
 		let html = '';
 		let currentParagraph = '';
-		
+
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i].trim();
-			
+
 			if (!line) {
 				// Empty line - close current paragraph if exists
 				if (currentParagraph) {
@@ -3578,7 +3583,7 @@ export class StockChart extends HTMLElement {
 				}
 				continue;
 			}
-			
+
 			// If line is already HTML (heading, list, etc.), add it directly
 			if (line.startsWith('<h') || line.startsWith('<ul>') || line.startsWith('</ul>') || line.startsWith('<li>')) {
 				if (currentParagraph) {
@@ -3595,25 +3600,25 @@ export class StockChart extends HTMLElement {
 				}
 			}
 		}
-		
+
 		// Add any remaining paragraph
 		if (currentParagraph) {
 			html += '<p>' + currentParagraph + '</p>';
 		}
-		
+
 		// Add cache information at the top
-		const cacheInfo = fromCache 
+		const cacheInfo = fromCache
 			? '<div class="ai-summary-cache-info">📦 This summary is cached and will be valid for 4 hours.</div>'
 			: '<div class="ai-summary-cache-info">💾 This summary will be cached for 4 hours.</div>';
-		
+
 		content.innerHTML = cacheInfo + html;
 	}
-	
+
 	async callGeminiAPIForSummary(apiKey, symbol, companyInfo) {
 		console.log('[AI Summary] Calling Gemini API for:', symbol);
-		
+
 		const companyName = companyInfo.name || symbol;
-		
+
 		const prompt = `Erstelle mir eine umfassende, klar strukturierte und optisch ansprechende Investment-Analyse zu ${companyName} (${symbol}).
 
 Die Analyse soll so aufgebaut sein, dass ich als Investor eine fundierte Entscheidung treffen kann, ob ich in ${companyName} investieren soll oder nicht – inklusive klarer Begründung.
@@ -3691,7 +3696,7 @@ Bitte nutze, wenn möglich, aktuell verfügbare Daten und achte auf logische, ve
 Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-		
+
 		const response = await fetch(url, {
 			method: 'POST',
 			headers: {
@@ -3705,14 +3710,14 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}]
 			})
 		});
-		
+
 		if (!response.ok) {
 			const errorText = await response.text();
 			throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
 		}
-		
+
 		const data = await response.json();
-		
+
 		let summary = "";
 		if (data.candidates && data.candidates.length > 0) {
 			const candidate = data.candidates[0];
@@ -3724,11 +3729,11 @@ Die Ausgabe soll hochwertig, präzise und visuell gut strukturiert sein.`;
 				}
 			}
 		}
-		
+
 		if (!summary) {
 			throw new Error('No summary generated by Gemini API');
 		}
-		
+
 		return summary;
 	}
 }

@@ -11,11 +11,11 @@ export class StockSwot extends HTMLElement {
 		this.symbol = null;
 		this.isGenerating = false; // Flag to prevent multiple simultaneous requests
 	}
-	
+
 	static get observedAttributes() {
 		return ['symbol'];
 	}
-	
+
 	attributeChangedCallback(name, oldValue, newValue) {
 		if (name === 'symbol' && newValue !== oldValue) {
 			this.symbol = newValue;
@@ -24,7 +24,7 @@ export class StockSwot extends HTMLElement {
 			}
 		}
 	}
-	
+
 	connectedCallback() {
 		this.symbol = this.getAttribute('symbol');
 		this.shadowRoot.innerHTML = `
@@ -391,10 +391,10 @@ export class StockSwot extends HTMLElement {
 				</div>
 			</div>
 		`;
-		
+
 		// Setup info icon
 		this.setupInfoIcon();
-		
+
 		// Register analyze button listener ONCE in connectedCallback
 		const analyzeBtn = this.shadowRoot.getElementById('analyze-btn');
 		if (analyzeBtn) {
@@ -408,47 +408,47 @@ export class StockSwot extends HTMLElement {
 				this.generateSwotAnalysis();
 			});
 		}
-		
+
 		if (this.symbol) {
 			this.load(this.symbol);
 		}
-		
+
 		// Apply saved theme
 		const savedTheme = localStorage.getItem('theme') || 'dark';
 		if (savedTheme === 'light') {
 			this.classList.add('light-mode');
 		}
 	}
-	
+
 	setupInfoIcon() {
 		const infoIcon = this.shadowRoot.getElementById('swot-info-icon');
 		const overlay = this.shadowRoot.getElementById('swot-info-modal-overlay');
 		const closeBtn = this.shadowRoot.getElementById('swot-info-modal-close');
 		const content = this.shadowRoot.getElementById('swot-info-modal-content');
-		
+
 		if (!infoIcon || !overlay || !closeBtn || !content) return;
-		
+
 		infoIcon.addEventListener('click', () => {
 			this.openInfoModal();
 		});
-		
+
 		closeBtn.addEventListener('click', () => {
 			overlay.classList.remove('show');
 		});
-		
+
 		overlay.addEventListener('click', (e) => {
 			if (e.target === overlay) {
 				overlay.classList.remove('show');
 			}
 		});
 	}
-	
+
 	openInfoModal() {
 		const overlay = this.shadowRoot.getElementById('swot-info-modal-overlay');
 		const content = this.shadowRoot.getElementById('swot-info-modal-content');
-		
+
 		if (!overlay || !content) return;
-		
+
 		content.innerHTML = `
 			<h3>What is SWOT Analysis?</h3>
 			<p>SWOT Analysis is a strategic planning framework that evaluates a company's Strengths, Weaknesses, Opportunities, and Threats. It provides a comprehensive view of the company's internal capabilities and external environment.</p>
@@ -478,10 +478,10 @@ export class StockSwot extends HTMLElement {
 			
 			<p><strong>Tip:</strong> SWOT Analysis is most valuable when updated regularly as market conditions and company circumstances change. Use it as one tool in your investment analysis toolkit, combined with fundamental analysis, technical analysis, and market research. Remember that this analysis is AI-generated and should be verified with additional research.</p>
 		`;
-		
+
 		overlay.classList.add('show');
 	}
-	
+
 	load(symbol) {
 		this.symbol = symbol;
 		['strengths', 'weaknesses', 'opportunities', 'threats'].forEach(id => {
@@ -492,57 +492,62 @@ export class StockSwot extends HTMLElement {
 			}
 		});
 	}
-	
+
 	async generateSwotAnalysis() {
 		// CRITICAL: Prevent multiple simultaneous requests using flag
 		if (this.isGenerating) {
 			console.warn('SWOT analysis already in progress, ignoring duplicate request');
 			return;
 		}
-		
+
 		const analyzeBtn = this.shadowRoot.getElementById('analyze-btn');
 		if (!analyzeBtn) {
 			console.error('Analyze button not found');
 			return;
 		}
-		
-		const geminiKey = 'AIzaSyCcE73jChTNokgneI8zfy_Z4zGu37JU_3A';
-		
+
+		const keys = getStorageKeys();
+		const geminiKey = getLocal(keys.GEMINI_KEY);
+		if (!geminiKey) {
+			alert('Gemini API key not configured. Please check your .env file.');
+			return;
+		}
+
 		if (!this.symbol) {
 			alert('No stock symbol available.');
 			return;
 		}
-		
+
 		// Set flag FIRST, before any async operations
 		this.isGenerating = true;
 		analyzeBtn.disabled = true;
 		const originalText = analyzeBtn.innerHTML;
 		analyzeBtn.innerHTML = '<span class="loading-indicator"></span> Analyzing...';
-		
+
 		console.log('=== STARTING SWOT ANALYSIS ===');
 		console.log('Symbol:', this.symbol);
 		console.log('Timestamp:', new Date().toISOString());
-		
+
 		try {
 			// Fetch company information first
 			console.log('Fetching company info...');
 			const companyInfo = await this.fetchCompanyInfo(this.symbol);
 			console.log('Company info fetched:', companyInfo);
-			
+
 			// Generate SWOT analysis with Gemini (SINGLE REQUEST ONLY)
 			console.log('Calling Gemini API (single request)...');
 			const swotAnalysis = await this.callGeminiAPI(geminiKey, this.symbol, companyInfo);
 			console.log('SWOT analysis received:', swotAnalysis);
-			
+
 			// Parse and fill SWOT fields
 			this.fillSwotFields(swotAnalysis);
 			console.log('=== SWOT ANALYSIS COMPLETE ===');
-			
+
 		} catch (error) {
 			console.error('=== ERROR IN SWOT ANALYSIS ===');
 			console.error('Error:', error);
 			const errorMessage = error.message || 'Unknown error';
-			
+
 			// Show user-friendly message for overload errors
 			if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
 				alert('The API is currently busy. Please wait a few seconds and try again.\n\nThe free tier has rate limits - please don\'t click the button multiple times.');
@@ -557,15 +562,15 @@ export class StockSwot extends HTMLElement {
 			analyzeBtn.innerHTML = originalText;
 		}
 	}
-	
-	
+
+
 	async fetchCompanyInfo(symbol) {
 		try {
 			// Fetch from Yahoo Finance
 			const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y`;
 			let response;
 			let data;
-			
+
 			try {
 				response = await fetch(url);
 				if (!response.ok) throw new Error('Direct fetch failed');
@@ -577,7 +582,7 @@ export class StockSwot extends HTMLElement {
 				const proxyData = await response.json();
 				data = JSON.parse(proxyData.contents);
 			}
-			
+
 			if (data.chart && data.chart.result && data.chart.result.length > 0) {
 				const result = data.chart.result[0];
 				const meta = result.meta || {};
@@ -593,10 +598,10 @@ export class StockSwot extends HTMLElement {
 		} catch (error) {
 			console.warn('Could not fetch company info:', error);
 		}
-		
+
 		return { symbol: symbol, name: symbol };
 	}
-	
+
 	async fetchWithRetries(url, options = {}, maxRetries = 3) {
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			let response;
@@ -612,7 +617,7 @@ export class StockSwot extends HTMLElement {
 				await new Promise(res => setTimeout(res, delay));
 				continue;
 			}
-			
+
 			// Bei 503/429: Backoff + Retry
 			if (response.status === 503 || response.status === 429) {
 				if (attempt === maxRetries) {
@@ -625,13 +630,13 @@ export class StockSwot extends HTMLElement {
 					}
 					throw new Error(`Service overloaded or rate-limited: ${errorText}`);
 				}
-				
+
 				const delay = (2 ** attempt + Math.random()) * 1000;
 				console.warn(`Gemini overloaded / rate-limited (status ${response.status}). Retry in ${Math.round(delay)}ms... (attempt ${attempt + 1}/${maxRetries + 1})`);
 				await new Promise(res => setTimeout(res, delay));
 				continue;
 			}
-			
+
 			// Andere Fehler ohne Retry
 			if (!response.ok) {
 				let errorData;
@@ -643,18 +648,18 @@ export class StockSwot extends HTMLElement {
 				const errorMsg = errorData.error?.message || errorData.message || `API error: ${response.status}`;
 				throw new Error(errorMsg);
 			}
-			
+
 			// Erfolg
 			return response;
 		}
 	}
-	
+
 	async callGeminiAPI(apiKey, symbol, companyInfo) {
 		console.log('=== GEMINI API CALL START ===');
 		console.log('API Key (first 10 chars):', apiKey.substring(0, 10) + '...');
 		console.log('Symbol:', symbol);
 		console.log('Company Info:', companyInfo);
-		
+
 		const prompt = `Analyze the stock ${symbol} (${companyInfo.name || symbol}) and provide a comprehensive SWOT analysis.
 
 Company Information:
@@ -696,10 +701,10 @@ Provide 3-5 points per category, ranked by importance. Return ONLY valid JSON, n
 		// Use gemini-2.5-flash for free tier (as per official documentation)
 		// Use global endpoint (regional endpoints may not be available for free tier)
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-		
+
 		console.log('Making fetch request to Gemini API...');
 		console.log('URL (without key):', url.split('?key=')[0] + '?key=***');
-		
+
 		let response;
 		try {
 			response = await this.fetchWithRetries(
@@ -719,13 +724,13 @@ Provide 3-5 points per category, ranked by importance. Return ONLY valid JSON, n
 				},
 				3 // maxRetries
 			);
-			
+
 			console.log('Response status:', response.status, response.statusText);
 		} catch (networkOrOverloadError) {
 			console.error('Gemini fetch failed after retries:', networkOrOverloadError);
 			throw networkOrOverloadError;
 		}
-		
+
 		let data;
 		try {
 			data = await response.json();
@@ -733,20 +738,20 @@ Provide 3-5 points per category, ranked by importance. Return ONLY valid JSON, n
 			console.error('JSON parse error:', parseError);
 			throw new Error('Invalid response from API');
 		}
-		
+
 		const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-		
+
 		if (!text) {
 			console.error('Empty response from API:', data);
 			throw new Error('Empty response from API. Please try again.');
 		}
-		
+
 		// Extract JSON from response (might have markdown code blocks)
 		let jsonText = text.trim();
 		if (jsonText.startsWith('```')) {
 			jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
 		}
-		
+
 		try {
 			return JSON.parse(jsonText);
 		} catch (parseError) {
@@ -755,34 +760,34 @@ Provide 3-5 points per category, ranked by importance. Return ONLY valid JSON, n
 			throw new Error('Failed to parse SWOT analysis. The API response was not in the expected format.');
 		}
 	}
-	
+
 	fillSwotFields(swotAnalysis) {
 		const sections = ['strengths', 'weaknesses', 'opportunities', 'threats'];
-		
+
 		sections.forEach(section => {
 			const area = this.shadowRoot.getElementById(section);
 			if (!area || !swotAnalysis[section]) return;
-			
+
 			// Sort by priority (high first, then medium, then low)
 			const sorted = [...swotAnalysis[section]].sort((a, b) => {
 				const priorityOrder = { high: 0, medium: 1, low: 2 };
 				return priorityOrder[a.priority] - priorityOrder[b.priority];
 			});
-			
+
 			// Format as clean bullet points with better spacing
 			const plainText = sorted.map((item) => {
 				// Use simple bullet point, no emojis
 				return `• ${item.point}`;
 			}).join('\n\n'); // Double line break for better readability
-			
+
 			area.value = plainText;
-			
+
 			// Auto-resize textarea to fit content (no scrolling needed)
 			setTimeout(() => {
 				area.style.height = 'auto';
 				const newHeight = Math.max(150, area.scrollHeight + 20);
 				area.style.height = newHeight + 'px';
-				
+
 				// Also adjust the box height to match
 				const box = area.closest('.box');
 				if (box) {

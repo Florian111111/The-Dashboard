@@ -34,23 +34,27 @@ except ImportError:
 if not USE_YFINANCE_EXTRAS:
     print("[Python Backend] yfinance extras disabled - using Finnhub only for maximum performance")
 
-# Finnhub API Key - Load from environment variable for security
-# REQUIRED: Set FINNHUB_API_KEY environment variable or in .env file
-# For development, you can temporarily use the fallback (NOT RECOMMENDED FOR PRODUCTION)
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "d4fhhj1r01qufc4uk5egd4fhhj1r01qufc4uk5f0")
+# ===========================================
+# API Keys - Load from environment variables
+# ===========================================
+
+# Finnhub API Key (required for fundamentals data)
+# Get your free key at: https://finnhub.io/register
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
 
-if not FINNHUB_API_KEY or FINNHUB_API_KEY == "":
+if not FINNHUB_API_KEY:
     raise ValueError("FINNHUB_API_KEY environment variable is required! Please set it in .env file or as environment variable.")
 
-# Twitter/X API Key - NOT NEEDED (using embed widgets instead)
-# TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "")
+# Google Gemini API Key (required for AI SWOT analysis)
+# Get your free key at: https://makersuite.google.com/app/apikey
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# Google Gemini API Key - Load from environment variable
-# REQUIRED for AI Summary feature: Set GOOGLE_API_KEY environment variable or in .env file
-# For development, you can temporarily use the fallback (NOT RECOMMENDED FOR PRODUCTION)
-# To get an API key: https://makersuite.google.com/app/apikey
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyCcE73jChTNokgneI8zfy_Z4zGu37JU_3A")
+if not GOOGLE_API_KEY:
+    print("[Python Backend] WARNING: GOOGLE_API_KEY not set. AI features will be disabled.")
+
+# FRED API Key (for macroeconomic data - used by frontend through this backend)
+FRED_API_KEY = os.getenv("FRED_API_KEY")
 
 # Configure logging
 logging.basicConfig(
@@ -81,15 +85,19 @@ SENTIMENT_403_TTL = timedelta(hours=24)  # Cache 403 errors for 24 hours
 price_changes_error_cache = {}  # {symbol: datetime}
 PRICE_CHANGES_ERROR_TTL = timedelta(hours=1)  # Cache errors for 1 hour
 
+# ===========================================
+# Rate Limiting Configuration (from environment)
+# ===========================================
+
 # Rate limiting per IP (in-memory, resets on server restart)
 rate_limit_cache = {}
-RATE_LIMIT_REQUESTS = 100  # Max requests per window
-RATE_LIMIT_WINDOW = 60  # Time window in seconds
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))  # Max requests per window
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # Time window in seconds
 
 # Session-based rate limiting: 5 minutes usage, then 5 minutes cooldown
 session_rate_limit_cache = {}
-SESSION_DURATION = 300  # 5 minutes usage
-COOLDOWN_DURATION = 300  # 5 minutes cooldown
+SESSION_DURATION = int(os.getenv("SESSION_DURATION", "300"))  # 5 minutes usage
+COOLDOWN_DURATION = int(os.getenv("COOLDOWN_DURATION", "300"))  # 5 minutes cooldown
 
 def check_rate_limit(ip: str) -> bool:
     """Check if IP has exceeded rate limit"""
@@ -254,6 +262,19 @@ async def add_security_headers(request: Request, call_next):
 @app.get("/api/health")
 def api_health():
     return {"message": "Python Finnhub Backend", "status": "running"}
+
+
+# Frontend config endpoint - serves API keys to the frontend
+@app.get("/api/config")
+def get_config():
+    """
+    Serves configuration/API keys to the frontend.
+    Only expose keys that the frontend needs directly.
+    """
+    return {
+        "fredApiKey": FRED_API_KEY or "",
+        "geminiApiKey": GOOGLE_API_KEY or "",
+    }
 
 
 @app.get("/api/session-status")

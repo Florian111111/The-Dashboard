@@ -20,26 +20,43 @@ import { API_BASE_URL } from './config.js';
 
 ensureDefaultStorage();
 
-// Set default FRED API key
+// Fetch API keys from backend config and store them locally
 import { getLocal, setLocal, getStorageKeys } from './utils/storage.js';
 const keys = getStorageKeys();
-if (!getLocal(keys.FRED_KEY)) {
-	setLocal(keys.FRED_KEY, '4934925036aaf864a2e479c52edfdac9');
+
+// Initialize config from backend
+async function initConfig() {
+	try {
+		// Try to get config from Node.js backend (port 3000)
+		const response = await fetch('/api/config');
+		if (response.ok) {
+			const config = await response.json();
+			if (config.fredApiKey) {
+				setLocal(keys.FRED_KEY, config.fredApiKey);
+			}
+			if (config.geminiApiKey) {
+				setLocal(keys.GEMINI_KEY, config.geminiApiKey);
+			}
+		}
+	} catch (error) {
+		console.warn('Could not fetch config from backend:', error.message);
+	}
 }
+initConfig();
 
 class App {
 	constructor() {
 		this.currentPage = 'market-overview';
 		this.appContainer = document.getElementById('app');
-		
+
 		if (!this.appContainer) {
 			console.error('App container not found!');
 			return;
 		}
-		
+
 		this.init();
 	}
-	
+
 	init() {
 		try {
 			// Register pages
@@ -91,19 +108,19 @@ class App {
 			if (!customElements.get('rate-limit-banner')) {
 				customElements.define('rate-limit-banner', RateLimitBanner);
 			}
-			
+
 			// Add cookie banner to body
 			if (!document.querySelector('cookie-banner')) {
 				const cookieBanner = document.createElement('cookie-banner');
 				document.body.appendChild(cookieBanner);
-				
+
 				// Check if cookies were previously accepted and load AdSense if needed
 				const cookiePreference = localStorage.getItem('cookiePreference');
 				if (cookiePreference === 'accepted') {
 					// AdSense will be loaded by the cookie banner component
 				}
 			}
-			
+
 			// Add rate limit banner to body
 			if (!document.querySelector('rate-limit-banner')) {
 				const rateLimitBanner = document.createElement('rate-limit-banner');
@@ -112,24 +129,24 @@ class App {
 			} else {
 				this.rateLimitBanner = document.querySelector('rate-limit-banner');
 			}
-			
+
 			// Add mobile orientation warning to body
 			if (!document.querySelector('mobile-orientation-warning')) {
 				const mobileWarning = document.createElement('mobile-orientation-warning');
 				document.body.appendChild(mobileWarning);
 			}
-			
+
 			// Setup global fetch interceptor for rate limiting
 			this.setupRateLimitInterceptor();
-			
+
 			// Setup session monitoring to show banner when session expires
 			this.setupSessionMonitoring();
-			
+
 			// Listen for navigation events
 			window.addEventListener('navigate', (e) => {
 				this.navigate(e.detail.page, e.detail, true);
 			});
-			
+
 			// Handle browser back/forward buttons
 			window.addEventListener('popstate', (e) => {
 				if (e.state) {
@@ -140,7 +157,7 @@ class App {
 					this.navigate(page, params, false);
 				}
 			});
-			
+
 			// Initial load from URL
 			// Use setTimeout to ensure DOM is fully ready
 			setTimeout(() => {
@@ -152,16 +169,16 @@ class App {
 			this.appContainer.innerHTML = '<div style="color: #ef4444; padding: 20px;">Error loading application. Please check the console.</div>';
 		}
 	}
-	
+
 	// Parse URL to get page and parameters
 	parseUrl() {
 		const path = window.location.pathname;
 		const searchParams = new URLSearchParams(window.location.search);
-		
+
 		// Default
 		let page = 'market-overview';
 		let params = {};
-		
+
 		// Parse path
 		if (path === '/' || path === '' || path === '/index.html') {
 			page = 'market-overview';
@@ -206,13 +223,13 @@ class App {
 		} else if (path === '/economic-calendar') {
 			page = 'economic-calendar';
 		}
-		
+
 		return { page, params };
 	}
-	
+
 	// Build URL from page and parameters
 	buildUrl(page, params = {}) {
-		switch(page) {
+		switch (page) {
 			case 'market-overview':
 				return '/';
 			case 'stock-analysis':
@@ -254,12 +271,12 @@ class App {
 				return '/';
 		}
 	}
-	
+
 	navigate(page, params = {}, updateUrl = true) {
 		console.log('[App] Navigating to:', page, params);
 		this.currentPage = page;
 		this.appContainer.innerHTML = '';
-		
+
 		// Update URL if needed
 		if (updateUrl) {
 			const url = this.buildUrl(page, params);
@@ -269,11 +286,11 @@ class App {
 		} else {
 			document.title = this.getPageTitle(page, params);
 		}
-		
+
 		// Update SEO Meta Tags
 		this.updateMetaTags(page, params);
-		
-		switch(page) {
+
+		switch (page) {
 			case 'market-overview':
 				this.appContainer.innerHTML = '<market-overview></market-overview>';
 				break;
@@ -326,14 +343,14 @@ class App {
 			default:
 				this.appContainer.innerHTML = '<market-overview></market-overview>';
 		}
-		
+
 		// Scroll to top on navigation
 		window.scrollTo(0, 0);
 	}
-	
+
 	getPageTitle(page, params = {}) {
 		const baseTitle = 'Stock Analysis Platform';
-		switch(page) {
+		switch (page) {
 			case 'market-overview':
 				return `Market Overview | ${baseTitle}`;
 			case 'stock-analysis':
@@ -366,12 +383,12 @@ class App {
 				return baseTitle;
 		}
 	}
-	
+
 	// Update or create meta tag
 	updateOrCreateMeta(selector, content, attribute = 'name') {
-		let meta = document.querySelector(`meta[${attribute}="${selector}"]`) || 
-		           document.querySelector(`meta[property="${selector}"]`);
-		
+		let meta = document.querySelector(`meta[${attribute}="${selector}"]`) ||
+			document.querySelector(`meta[property="${selector}"]`);
+
 		if (!meta) {
 			meta = document.createElement('meta');
 			if (attribute === 'property') {
@@ -381,24 +398,24 @@ class App {
 			}
 			document.head.appendChild(meta);
 		}
-		
+
 		meta.setAttribute('content', content);
 	}
-	
+
 	// Update SEO Meta Tags dynamically
 	updateMetaTags(page, params = {}) {
 		const baseUrl = window.location.origin;
 		const baseTitle = 'Stock Analysis Platform';
 		let title, description, url, image;
-		
+
 		// Determine page-specific content
-		switch(page) {
+		switch (page) {
 			case 'market-overview':
 				title = `Market Overview | ${baseTitle}`;
 				description = 'Real-time global market data, major indices (S&P 500, DAX, Nikkei, etc.), macroeconomic indicators (VIX, Treasury Yields, Gold), currencies, and commodities. Get comprehensive market insights at a glance.';
 				url = `${baseUrl}/`;
 				break;
-				
+
 			case 'stock-analysis':
 				if (params.symbol) {
 					title = `${params.symbol} Stock Analysis | ${baseTitle}`;
@@ -410,22 +427,22 @@ class App {
 					url = `${baseUrl}/`;
 				}
 				break;
-				
+
 			case 'indicator-detail':
 				const indicatorName = params.name || params.symbol || 'Technical Indicator';
 				title = `${indicatorName} | ${baseTitle}`;
 				description = params.description || `Detailed analysis of ${indicatorName} technical indicator for ${params.symbol || 'stocks'}. Learn how to interpret and use this indicator for better trading decisions.`;
 				url = params.symbol ? `${baseUrl}/indicator/${encodeURIComponent(params.symbol)}` : `${baseUrl}/`;
 				break;
-				
+
 			case 'fundamentals-detail':
 				title = params.symbol ? `${params.symbol} Fundamentals | ${baseTitle}` : `Fundamentals | ${baseTitle}`;
-				description = params.symbol 
+				description = params.symbol
 					? `Complete fundamental analysis of ${params.symbol} including P/E ratio, P/B ratio, ROE, debt-to-equity, margins, cashflow, balance sheet, and more financial metrics.`
 					: 'Comprehensive fundamental analysis including valuation metrics, profitability ratios, financial health indicators, and balance sheet data.';
 				url = params.symbol ? `${baseUrl}/fundamentals/${encodeURIComponent(params.symbol)}` : `${baseUrl}/`;
 				break;
-				
+
 			case 'earnings-detail':
 				title = params.symbol ? `${params.symbol} Earnings | ${baseTitle}` : `Earnings Analysis | ${baseTitle}`;
 				description = params.symbol
@@ -433,80 +450,80 @@ class App {
 					: 'Detailed earnings analysis including historical earnings data, earnings surprises, revenue trends, and quarterly performance metrics.';
 				url = params.symbol ? `${baseUrl}/earnings/${encodeURIComponent(params.symbol)}` : `${baseUrl}/`;
 				break;
-				
+
 			case 'watchlist':
 				title = `Watchlist | ${baseTitle}`;
 				description = 'Track and monitor your favorite stocks in one place. Get real-time updates on price changes, news, and key metrics for all your watched stocks.';
 				url = `${baseUrl}/watchlist`;
 				break;
-				
+
 			case 'stock-comparison':
 				title = `Stock Comparison | ${baseTitle}`;
 				description = 'Compare multiple stocks side-by-side. Analyze key metrics, performance, fundamentals, and technical indicators to make informed investment decisions.';
 				url = `${baseUrl}/comparison`;
 				break;
-				
+
 			case 'backtesting':
 				title = `Backtesting Engine | ${baseTitle}`;
 				description = 'Test your trading strategies with historical data. Backtest technical indicators, moving averages, and custom strategies to evaluate performance.';
 				url = `${baseUrl}/backtesting`;
 				break;
-				
+
 			case 'backtesting-pro':
 				title = `Backtesting Engine Pro | ${baseTitle}`;
 				description = 'Advanced backtesting engine with custom strategies, multiple indicators, risk management, and detailed performance analytics.';
 				url = `${baseUrl}/backtesting-pro`;
 				break;
-				
+
 			case 'portfolio-tracking':
 				title = `Portfolio Tracking & Analysis | ${baseTitle}`;
 				description = 'Track your investment portfolio with real-time performance metrics, asset allocation, gains/losses, and comprehensive portfolio analytics.';
 				url = `${baseUrl}/portfolio`;
 				break;
-				
+
 			case 'economic-calendar':
 				title = `Economic Calendar | ${baseTitle}`;
 				description = 'Stay informed about upcoming economic events, earnings announcements, Fed meetings, and key financial indicators that impact the markets.';
 				url = `${baseUrl}/economic-calendar`;
 				break;
-				
+
 			case 'impressum':
 				title = `Impressum | ${baseTitle}`;
 				description = 'Legal information and contact details for Stock Analysis Platform.';
 				url = `${baseUrl}/impressum`;
 				break;
-				
+
 			case 'privacy-policy':
 				title = `Privacy Policy | ${baseTitle}`;
 				description = 'Privacy policy and data protection information for Stock Analysis Platform.';
 				url = `${baseUrl}/privacy-policy`;
 				break;
-				
+
 			case 'disclaimer':
 				title = `Disclaimer | ${baseTitle}`;
 				description = 'Legal disclaimer and terms of use for Stock Analysis Platform.';
 				url = `${baseUrl}/disclaimer`;
 				break;
-				
+
 			default:
 				title = baseTitle;
 				description = 'Comprehensive stock analysis platform with real-time market data, technical indicators, fundamentals, earnings analysis, and AI-powered insights.';
 				url = baseUrl;
 		}
-		
+
 		// Determine OG image based on page type
 		image = this.getOGImage(page, params, baseUrl);
-		
+
 		// Update document title
 		document.title = title;
-		
+
 		// Update canonical URL
 		this.updateCanonicalUrl(url);
-		
+
 		// Update basic meta tags
 		this.updateOrCreateMeta('title', title);
 		this.updateOrCreateMeta('description', description);
-		
+
 		// Update Open Graph tags
 		this.updateOrCreateMeta('og:url', url, 'property');
 		this.updateOrCreateMeta('og:title', title, 'property');
@@ -515,17 +532,17 @@ class App {
 		this.updateOrCreateMeta('og:image:width', '1200', 'property');
 		this.updateOrCreateMeta('og:image:height', '630', 'property');
 		this.updateOrCreateMeta('og:image:type', 'image/png', 'property');
-		
+
 		// Update Twitter Card tags
 		this.updateOrCreateMeta('twitter:url', url);
 		this.updateOrCreateMeta('twitter:title', title);
 		this.updateOrCreateMeta('twitter:description', description);
 		this.updateOrCreateMeta('twitter:image', image);
-		
+
 		// Update structured data (JSON-LD)
 		this.updateStructuredData(page, params, title, description, url, image);
 	}
-	
+
 	// Get appropriate OG image for the page
 	getOGImage(page, params, baseUrl) {
 		// For stock analysis pages, try to use a logo or generate a dynamic image
@@ -536,9 +553,9 @@ class App {
 			// For now, we'll use a dynamic approach that can be extended
 			return `${baseUrl}/og-image-stock.png?symbol=${encodeURIComponent(params.symbol)}`;
 		}
-		
+
 		// For other pages, use page-specific images
-		switch(page) {
+		switch (page) {
 			case 'market-overview':
 				return `${baseUrl}/og-image-market.png`;
 			case 'watchlist':
@@ -557,7 +574,7 @@ class App {
 				return `${baseUrl}/og-image.png`;
 		}
 	}
-	
+
 	// Update canonical URL
 	updateCanonicalUrl(url) {
 		let canonical = document.getElementById('canonical-url');
@@ -569,12 +586,12 @@ class App {
 		}
 		canonical.href = url;
 	}
-	
+
 	// Update structured data (Schema.org)
 	updateStructuredData(page, params, title, description, url, image) {
 		const baseUrl = window.location.origin;
 		let structuredData;
-		
+
 		if (page === 'stock-analysis' && params.symbol) {
 			// Financial Product schema for stock analysis pages
 			structuredData = {
@@ -656,7 +673,7 @@ class App {
 				}
 			};
 		}
-		
+
 		// Update or create structured data script
 		let script = document.getElementById('structured-data');
 		if (!script) {
@@ -673,23 +690,23 @@ class App {
 		const originalFetch = window.fetch;
 		const self = this;
 
-		window.fetch = async function(...args) {
+		window.fetch = async function (...args) {
 			try {
 				const response = await originalFetch.apply(this, args);
-				
+
 				// Check for rate limit error (429)
 				if (response.status === 429) {
 					const retryAfter = parseInt(response.headers.get('Retry-After') || '300');
 					const limitType = response.headers.get('X-RateLimit-Type') || 'session_cooldown';
-					
+
 					// Show rate limit banner
 					if (self.rateLimitBanner) {
 						self.rateLimitBanner.show(retryAfter, limitType, 0, 0);
 					}
-					
+
 					// Disable search on all pages
 					self.disableSearchDuringCooldown();
-					
+
 					// Try to get error message from response body
 					try {
 						const errorData = await response.clone().json();
@@ -698,7 +715,7 @@ class App {
 						console.warn('Session limit exceeded. Please wait before making another request');
 					}
 				}
-				
+
 				return response;
 			} catch (error) {
 				console.error('Fetch error:', error);
@@ -712,14 +729,14 @@ class App {
 		try {
 			const searchInputs = document.querySelectorAll('input[type="text"][id*="search"], input[type="text"][id*="Search"], input[placeholder*="search" i], input[placeholder*="Search" i]');
 			const allButtons = document.querySelectorAll('button');
-			
+
 			searchInputs.forEach(input => {
 				input.disabled = true;
 				input.placeholder = 'Search disabled - Please wait for cooldown period';
 				input.style.opacity = '0.5';
 				input.style.cursor = 'not-allowed';
 			});
-			
+
 			// Filter buttons by text content (since :has-text() is not valid CSS)
 			allButtons.forEach(button => {
 				const buttonText = button.textContent || button.innerText || '';
@@ -736,7 +753,7 @@ class App {
 		} catch (error) {
 			console.error('Error disabling search:', error);
 		}
-		
+
 		// Also disable via custom event for web components
 		window.dispatchEvent(new CustomEvent('rate-limit-cooldown', { detail: { active: true } }));
 	}
@@ -746,13 +763,13 @@ class App {
 		try {
 			const searchInputs = document.querySelectorAll('input[type="text"][id*="search"], input[type="text"][id*="Search"], input[placeholder*="search" i], input[placeholder*="Search" i]');
 			const allButtons = document.querySelectorAll('button');
-			
+
 			searchInputs.forEach(input => {
 				input.disabled = false;
 				input.style.opacity = '1';
 				input.style.cursor = 'text';
 			});
-			
+
 			// Filter buttons by text content
 			allButtons.forEach(button => {
 				const buttonText = button.textContent || button.innerText || '';
@@ -769,7 +786,7 @@ class App {
 		} catch (error) {
 			console.error('Error enabling search:', error);
 		}
-		
+
 		// Re-enable via custom event for web components
 		window.dispatchEvent(new CustomEvent('rate-limit-cooldown', { detail: { active: false } }));
 	}
@@ -782,13 +799,13 @@ class App {
 					method: 'GET',
 					headers: { 'Content-Type': 'application/json' }
 				});
-				
+
 				if (!response.ok) {
 					throw new Error(`HTTP error! status: ${response.status}`);
 				}
-				
+
 				const data = await response.json();
-				
+
 				if (!data.allowed) {
 					// Session expired or in cooldown - show banner
 					if (this.rateLimitBanner) {
@@ -821,10 +838,10 @@ class App {
 				}
 			}
 		};
-		
+
 		// Check immediately on start
 		checkSession();
-		
+
 		// Then check every 10 seconds for more responsive updates
 		// Reduced polling frequency: check every 60 seconds instead of 10 seconds
 		// Session status doesn't change frequently, so we don't need to poll so often

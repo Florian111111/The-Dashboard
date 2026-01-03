@@ -1,9 +1,11 @@
+import { getLocal, getStorageKeys } from '../utils/storage.js';
+
 export class StockMacro extends HTMLElement {
 	constructor() {
 		super();
 		this.attachShadow({ mode: 'open' });
 	}
-	
+
 	connectedCallback() {
 		this.shadowRoot.innerHTML = `
 			<style>
@@ -71,19 +73,26 @@ export class StockMacro extends HTMLElement {
 				<div class="loading">Loading macro data...</div>
 			</div>
 		`;
-		
+
 		// Apply saved theme
 		const savedTheme = localStorage.getItem('theme') || 'dark';
 		if (savedTheme === 'light') {
 			this.classList.add('light-mode');
 		}
-		
+
 		this.load();
 	}
-	
+
 	async load() {
-		const apiKey = '4934925036aaf864a2e479c52edfdac9';
-		
+		const keys = getStorageKeys();
+		const apiKey = getLocal(keys.FRED_KEY);
+		if (!apiKey) {
+			console.error('FRED API key not configured');
+			this.shadowRoot.getElementById('content').innerHTML =
+				'<div class="loading">FRED API key not configured</div>';
+			return;
+		}
+
 		try {
 			// Use CORS proxy for FRED API
 			const [cpi, ur, gdp, fed] = await Promise.all([
@@ -92,21 +101,21 @@ export class StockMacro extends HTMLElement {
 				this.fetchFredSeries('GDP', apiKey),
 				this.fetchFredSeries('FEDFUNDS', apiKey)
 			]);
-			
+
 			const items = [];
 			if (cpi) items.push({ label: 'CPI (YoY)', value: cpi.value.toFixed(2), date: cpi.date });
 			if (ur) items.push({ label: 'Unemployment', value: ur.value.toFixed(2) + '%', date: ur.date });
 			if (gdp) items.push({ label: 'GDP Growth', value: gdp.value.toFixed(2) + '%', date: gdp.date });
 			if (fed) items.push({ label: 'Fed Funds Rate', value: fed.value.toFixed(2) + '%', date: fed.date });
-			
+
 			this.render(items);
 		} catch (error) {
 			console.error('Error loading macro data:', error);
-			this.shadowRoot.getElementById('content').innerHTML = 
+			this.shadowRoot.getElementById('content').innerHTML =
 				'<div class="loading">Unable to load macro data (CORS restrictions)</div>';
 		}
 	}
-	
+
 	async fetchFredSeries(seriesId, apiKey) {
 		try {
 			// Use proxy utility (tries local backend first)
@@ -116,7 +125,7 @@ export class StockMacro extends HTMLElement {
 				limit: 1,
 				sort_order: 'desc'
 			});
-			
+
 			const obs = data.observations || [];
 			const last = obs.find(o => o.value !== '.' && o.value !== '');
 			return last ? { date: last.date, value: Number(last.value) } : null;
@@ -125,15 +134,15 @@ export class StockMacro extends HTMLElement {
 			return null;
 		}
 	}
-	
+
 	render(items) {
 		const content = this.shadowRoot.getElementById('content');
-		
+
 		if (items.length === 0) {
 			content.innerHTML = '<div class="loading">No data available</div>';
 			return;
 		}
-		
+
 		content.innerHTML = items.map(item => `
 			<div class="card">
 				<div class="label">${item.label}</div>
