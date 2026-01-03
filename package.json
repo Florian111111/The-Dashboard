@@ -1,0 +1,24 @@
+{
+  "name": "stock-analysis-platform",
+  "version": "1.0.0",
+  "description": "Stock Analysis Platform with Express Proxy Server",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["stock", "analysis", "finance", "proxy"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0",
+    "yahoo-finance2": "^2.4.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+

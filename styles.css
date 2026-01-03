@@ -1,0 +1,76 @@
+:root{
+	--bg:#0b0f14;
+	--panel:#121821;
+	--text:#e6edf3;
+	--muted:#9fb0c0;
+	--accent:#4ea1f3;
+	--border:#1f2a37;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;width:100%}
+body{
+	font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+	background:var(--bg);
+	color:var(--text);
+}
+#app{
+	min-height:100vh;
+	width:100%;
+	min-width:1200px; /* Maintain desktop layout */
+}
+
+/* Component shells */
+market-overview, stock-analysis, stock-chart, stock-indicators, stock-fundamentals, stock-macro, stock-swot{
+	display:block;width:100%;min-width:1200px;
+}
+
+/* Desktop: hide horizontal scrollbar when not needed */
+@media (min-width: 1200px){
+	html,body{overflow-x:hidden}
+	#app{max-width:100%;overflow-x:hidden}
+}
+
+/* Mobile: allow horizontal scrolling */
+@media (max-width: 1199px){
+	html,body{overflow-x:auto;-webkit-overflow-scrolling:touch}
+	#app{overflow-x:visible}
+	body{padding:0}
+}
+
+/* ========== MOBILE TOUCH IMPROVEMENTS ========== */
+@media (max-width: 768px) {
+	/* Smooth scrolling for mobile */
+	html {
+		scroll-behavior: smooth;
+		-webkit-overflow-scrolling: touch;
+	}
+	
+	/* Prevent unwanted zoom on double tap */
+	* {
+		touch-action: manipulation;
+	}
+	
+	/* Prevent text selection on buttons for better UX */
+	button, 
+	.autocomplete-item,
+	.time-range-btn,
+	.feature-btn {
+		-webkit-tap-highlight-color: rgba(78, 161, 243, 0.2);
+		-webkit-touch-callout: none;
+		user-select: none;
+	}
+	
+	/* Prevent auto-zoom on input focus (iOS) */
+	input, textarea, select {
+		font-size: 16px;
+	}
+	
+	/* Smooth scrolling for modals and dropdowns */
+	.modal-content,
+	.autocomplete-dropdown,
+	.share-modal-content,
+	.info-modal-content {
+		-webkit-overflow-scrolling: touch;
+		overscroll-behavior: contain;
+	}
+}

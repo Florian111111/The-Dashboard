@@ -1,0 +1,17 @@
+So startest du die Backends über CMD:
+
+1. Windows-Taste + R drücken
+2. "cmd" eingeben und Enter drücken
+3. Diese Befehle nacheinander eingeben:
+
+cd "C:\Users\Flori\OneDrive\Dokumente\StockWebsite"
+START_ALL.bat
+
+ODER manuell beide Backends starten:
+
+cd "C:\Users\Flori\OneDrive\Dokumente\StockWebsite"
+start "Node.js" cmd /k "npm start"
+start "Python" cmd /k "python python_backend.py"
+timeout /t 3
+start http://localhost:3000
+

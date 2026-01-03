@@ -1,0 +1,47 @@
+{
+  "quoteSummary": {
+    "result": [{
+      "defaultKeyStatistics": {
+        "trailingPE": {"raw": 28.5},
+        "forwardPE": {"raw": 26.3},
+        "trailingEps": {"raw": 6.11},
+        "marketCap": {"raw": 3000000000000},
+        "priceToSalesTrailing12Months": {"raw": 7.5},
+        "priceToBook": {"raw": 45.2},
+        "pegRatio": {"raw": 2.1}
+      },
+      "financialData": {
+        "profitMargins": {"raw": 0.25},
+        "operatingMargins": {"raw": 0.30},
+        "ebitda": {"raw": 120000000000},
+        "totalRevenue": {"raw": 400000000000}
+      },
+      "summaryProfile": {
+        "longName": "Apple Inc.",
+        "sector": "Technology",
+        "industry": "Consumer Electronics"
+      },
+      "incomeStatementHistory": {
+        "incomeStatementHistory": [{
+          "totalRevenue": {"raw": 400000000000},
+          "netIncome": {"raw": 100000000000},
+          "ebit": {"raw": 110000000000},
+          "ebitda": {"raw": 120000000000}
+        }]
+      },
+      "balanceSheetHistory": {
+        "balanceSheetStatements": [{
+          "totalAssets": {"raw": 350000000000},
+          "totalLiab": {"raw": 280000000000}
+        }]
+      },
+      "cashflowStatementHistory": {
+        "cashflowStatements": [{
+          "operatingCashflow": {"raw": 110000000000},
+          "freeCashflow": {"raw": 95000000000}
+        }]
+      }
+    }]
+  }
+}
+
