@@ -95,8 +95,8 @@ export class RateLimitBanner extends HTMLElement {
 					right: 0;
 					background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 					color: #ffffff;
-					padding: 40px 20px;
-					min-height: 150px;
+					padding: 50px 20px;
+					min-height: 180px;
 					z-index: 10001;
 					box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 					transform: translateY(-100%);
@@ -173,8 +173,8 @@ export class RateLimitBanner extends HTMLElement {
 
 				@media (max-width: 768px) {
 					.rate-limit-banner {
-						padding: 32px 16px;
-						min-height: 160px;
+						padding: 42px 16px;
+						min-height: 190px;
 						flex-direction: column;
 						align-items: flex-start;
 					}

@@ -4,7 +4,7 @@ Runs on port 3001
 """
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, FileResponse, HTMLResponse
+from fastapi.responses import Response, FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import requests
@@ -231,10 +231,12 @@ def check_rate_limit(ip: str) -> bool:
 def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dict:
     """
     Check session-based rate limit:
-    - User can use the website for 5 minutes
-    - Then must wait 5 minutes before using again
+    - User can use the website for 5 minutes (timer starts on first API request)
+    - Timer continues running even if more API requests are made (does NOT reset)
+    - Then must wait 5 minutes before using again (cooldown)
     - During cooldown, no searches/stock analyses are allowed
-    - Session only starts when start_session_if_new=True (i.e., when API is actually used)
+    - After cooldown: Session only starts when start_session_if_new=True (i.e., when API is actually used)
+    - If no action is taken after cooldown, no session starts (session_remaining=0)
     
     Returns: {"allowed": bool, "retry_after": int, "session_remaining": int}
     """
@@ -272,18 +274,29 @@ def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dic
             "session_remaining": 0
         }
     
-    # Check if cooldown has ended - start new session
+    # Check if cooldown has ended
     if entry.get('cooldown_end') and now >= entry['cooldown_end']:
-        # Cooldown ended - start new session
-        entry['session_start'] = now
-        entry['session_end'] = now + SESSION_DURATION
-        entry['cooldown_end'] = None
-        session_remaining = SESSION_DURATION
-        return {
-            "allowed": True,
-            "retry_after": 0,
-            "session_remaining": session_remaining
-        }
+        # Cooldown ended - but only start new session if user is making an API request
+        if start_session_if_new:
+            # User is making an API request after cooldown - start new session
+            entry['session_start'] = now
+            entry['session_end'] = now + SESSION_DURATION
+            entry['cooldown_end'] = None
+            session_remaining = SESSION_DURATION
+            return {
+                "allowed": True,
+                "retry_after": 0,
+                "session_remaining": session_remaining
+            }
+        else:
+            # Cooldown ended but no API request - no session active
+            # Remove entry from cache so next API request (with start_session_if_new=True) will start fresh
+            del session_rate_limit_cache[ip]
+            return {
+                "allowed": True,
+                "retry_after": 0,
+                "session_remaining": 0  # No session active - waiting for user action
+            }
     
     # Check if session has expired
     if entry.get('session_end') and now >= entry['session_end']:
@@ -298,7 +311,7 @@ def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dic
             "session_remaining": 0
         }
     
-    # Session is active
+    # Session is active - timer continues from original start (NOT reset on new requests)
     session_remaining = int(entry['session_end'] - now)
     return {
         "allowed": True,
@@ -374,6 +387,37 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+# Session remaining header middleware
+@app.middleware("http")
+async def add_session_remaining_header(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Only add header for successful API responses
+    if response.status_code >= 200 and response.status_code < 300:
+        # Check if this is an API endpoint that uses session rate limiting
+        path = request.url.path
+        if path.startswith("/api/"):
+            # Get client IP
+            client_ip = get_remote_address(request)
+            
+            # Check session rate limit (without starting a new session)
+            if client_ip in session_rate_limit_cache:
+                entry = session_rate_limit_cache[client_ip]
+                now = time.time()
+                
+                # Check if session is active
+                if entry.get('session_end') and now < entry['session_end']:
+                    session_remaining = int(entry['session_end'] - now)
+                    response.headers["X-Session-Remaining"] = str(session_remaining)
+                else:
+                    # No active session
+                    response.headers["X-Session-Remaining"] = "0"
+            else:
+                # No session in cache
+                response.headers["X-Session-Remaining"] = "0"
+    
     return response
 
 # Root API health check (different from SPA root)

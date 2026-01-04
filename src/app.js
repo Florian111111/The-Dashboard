@@ -14,6 +14,7 @@ import { PortfolioTracking } from './pages/PortfolioTracking.js';
 import { EconomicCalendar } from './pages/EconomicCalendar.js';
 import { CookieBanner } from './components/CookieBanner.js';
 import { RateLimitBanner } from './components/RateLimitBanner.js';
+import { SessionTimer } from './components/SessionTimer.js';
 import { MobileOrientationWarning } from './components/MobileOrientationWarning.js';
 import { ensureDefaultStorage } from './utils/storage.js';
 import { API_BASE_URL } from './config.js';
@@ -84,6 +85,9 @@ class App {
 			if (!customElements.get('rate-limit-banner')) {
 				customElements.define('rate-limit-banner', RateLimitBanner);
 			}
+			if (!customElements.get('session-timer')) {
+				customElements.define('session-timer', SessionTimer);
+			}
 
 			// Add cookie banner to body
 			if (!document.querySelector('cookie-banner')) {
@@ -102,6 +106,13 @@ class App {
 				const rateLimitBanner = document.createElement('rate-limit-banner');
 				document.body.appendChild(rateLimitBanner);
 				this.rateLimitBanner = rateLimitBanner;
+			}
+
+			// Add session timer to body
+			if (!document.querySelector('session-timer')) {
+				const sessionTimer = document.createElement('session-timer');
+				document.body.appendChild(sessionTimer);
+				this.sessionTimer = sessionTimer;
 			} else {
 				this.rateLimitBanner = document.querySelector('rate-limit-banner');
 			}
@@ -114,9 +125,6 @@ class App {
 
 			// Setup global fetch interceptor for rate limiting
 			this.setupRateLimitInterceptor();
-
-			// Setup session monitoring to show banner when session expires
-			this.setupSessionMonitoring();
 
 			// Listen for navigation events
 			window.addEventListener('navigate', (e) => {
@@ -670,7 +678,7 @@ class App {
 			try {
 				const response = await originalFetch.apply(this, args);
 
-				// Check for rate limit error (429)
+				// Check for rate limit error (429) - Session expired, show banner
 				if (response.status === 429) {
 					const retryAfter = parseInt(response.headers.get('Retry-After') || '300');
 					const limitType = response.headers.get('X-RateLimit-Type') || 'session_cooldown';
@@ -689,6 +697,32 @@ class App {
 						console.warn('Session limit exceeded:', errorData.detail || 'Please wait before making another request');
 					} catch (e) {
 						console.warn('Session limit exceeded. Please wait before making another request');
+					}
+				} else if (response.ok && response.status >= 200 && response.status < 300) {
+					// Successful API call - hide banner if shown (cooldown ended, user can use site again)
+					if (self.rateLimitBanner) {
+						const banner = self.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
+						if (banner && banner.classList.contains('show')) {
+							self.rateLimitBanner.hide();
+							self.enableSearchAfterCooldown();
+						}
+					}
+
+					// Check for session remaining time in header
+					const sessionRemaining = response.headers.get('X-Session-Remaining');
+					if (sessionRemaining !== null) {
+						const remainingSeconds = parseInt(sessionRemaining, 10);
+						if (!isNaN(remainingSeconds) && remainingSeconds > 0) {
+							// Show session timer with remaining time
+							if (self.sessionTimer) {
+								self.sessionTimer.show(remainingSeconds);
+							}
+						} else {
+							// Hide session timer if session expired
+							if (self.sessionTimer) {
+								self.sessionTimer.hide();
+							}
+						}
 					}
 				}
 
@@ -767,62 +801,6 @@ class App {
 		window.dispatchEvent(new CustomEvent('rate-limit-cooldown', { detail: { active: false } }));
 	}
 
-	setupSessionMonitoring() {
-		// Check session status immediately on start
-		const checkSession = async () => {
-			try {
-				const response = await fetch(`${API_BASE_URL}/api/session-status`, {
-					method: 'GET',
-					headers: { 'Content-Type': 'application/json' }
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP error! status: ${response.status}`);
-				}
-
-				const data = await response.json();
-
-				if (!data.allowed) {
-					// Session expired or in cooldown - show banner
-					if (this.rateLimitBanner) {
-						const banner = this.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
-						if (!banner || !banner.classList.contains('show')) {
-							this.rateLimitBanner.show(data.retry_after, 'session_cooldown', 0, 0, data.session_remaining);
-							this.disableSearchDuringCooldown();
-						}
-					}
-				} else {
-					// Session is active - hide banner if shown (cooldown ended, new session started)
-					if (this.rateLimitBanner) {
-						const banner = this.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
-						if (banner && banner.classList.contains('show')) {
-							this.rateLimitBanner.hide();
-							this.enableSearchAfterCooldown();
-						}
-					}
-				}
-			} catch (error) {
-				// Silently fail - don't spam console with monitoring errors
-				console.debug('Session monitoring check failed:', error.message);
-				// If session status check fails, assume cooldown and show banner
-				if (this.rateLimitBanner) {
-					const banner = this.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
-					if (!banner || !banner.classList.contains('show')) {
-						this.rateLimitBanner.show(300, 'session_cooldown', 0, 0, 0); // Default to 5 min cooldown
-						this.disableSearchDuringCooldown();
-					}
-				}
-			}
-		};
-
-		// Check immediately on start
-		checkSession();
-
-		// Then check every 10 seconds for more responsive updates
-		// Reduced polling frequency: check every 60 seconds instead of 10 seconds
-		// Session status doesn't change frequently, so we don't need to poll so often
-		this.sessionCheckInterval = setInterval(checkSession, 60000);
-	}
 }
 
 // Start app when DOM is ready
