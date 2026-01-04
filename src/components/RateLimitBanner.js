@@ -11,6 +11,32 @@ export class RateLimitBanner extends HTMLElement {
 
 	connectedCallback() {
 		this.render();
+		
+		// Check if cooldown exists in localStorage (persistent across page reloads)
+		this.restoreCooldown();
+	}
+	
+	restoreCooldown() {
+		const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+		if (cooldownEndTimestamp) {
+			const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+			const now = Date.now();
+			const remaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+			
+			if (remaining > 0) {
+				// Cooldown still active - restore banner
+				console.log('[Rate Limit Banner] Restoring cooldown from localStorage:', remaining, 'seconds remaining');
+				const app = window.app;
+				if (app && app.disableSearchDuringCooldown) {
+					app.disableSearchDuringCooldown();
+				}
+				this.show(remaining, 'session_cooldown', 0, 0, 0);
+			} else {
+				// Cooldown expired - remove from localStorage
+				console.log('[Rate Limit Banner] Cooldown expired');
+				localStorage.removeItem('cooldown_end_timestamp');
+			}
+		}
 	}
 
 	disconnectedCallback() {
@@ -25,6 +51,13 @@ export class RateLimitBanner extends HTMLElement {
 		this.limit = limit;
 		this.window = window;
 		this.sessionRemaining = sessionRemaining;
+		
+		// Save cooldown_end timestamp to localStorage (persistent across page reloads)
+		if (retryAfter > 0) {
+			const cooldownEndTimestamp = Date.now() + (retryAfter * 1000);
+			localStorage.setItem('cooldown_end_timestamp', cooldownEndTimestamp.toString());
+		}
+		
 		this.render();
 		this.startCountdown();
 		this.shadowRoot.querySelector('.rate-limit-banner').classList.add('show');
@@ -38,6 +71,9 @@ export class RateLimitBanner extends HTMLElement {
 		if (banner) {
 			banner.classList.remove('show');
 		}
+		
+		// Remove cooldown_end from localStorage when banner is hidden
+		localStorage.removeItem('cooldown_end_timestamp');
 	}
 
 	startCountdown() {
@@ -48,9 +84,20 @@ export class RateLimitBanner extends HTMLElement {
 		const countdownElement = this.shadowRoot.querySelector('.countdown-time');
 		if (!countdownElement) return;
 
-		let remaining = this.retryAfter;
-
 		const updateCountdown = () => {
+			// Recalculate remaining time from localStorage to handle page reloads
+			const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+			let remaining = 0;
+			
+			if (cooldownEndTimestamp) {
+				const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+				const now = Date.now();
+				remaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+			} else {
+				// Fallback to this.retryAfter if no localStorage entry
+				remaining = this.retryAfter;
+			}
+			
 			if (remaining <= 0) {
 				clearInterval(this.countdownInterval);
 				this.hide();
@@ -64,7 +111,6 @@ export class RateLimitBanner extends HTMLElement {
 			const minutes = Math.floor(remaining / 60);
 			const seconds = remaining % 60;
 			countdownElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-			remaining--;
 		};
 
 		updateCountdown();

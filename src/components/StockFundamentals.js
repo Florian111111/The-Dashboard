@@ -641,9 +641,18 @@ export class StockFundamentals extends HTMLElement {
 			}
 			console.error('Error loading fundamentals:', error);
 			console.error('Error details:', error.message, error.stack);
-			const errorMsg = error.message || 'Unknown error';
+			
+			// Show user-friendly error message
+			let userFriendlyMessage = 'Too many users are currently using this feature. Please try again later.';
+			const errorMsg = error.message || '';
+			
+			// Check if it's a session limit or API limit error
+			if (errorMsg.includes('Session limit exceeded') || errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('503') || errorMsg.includes('400')) {
+				userFriendlyMessage = 'Too many users are currently using this feature. Please try again later.';
+			}
+			
 			this.shadowRoot.getElementById('content').innerHTML = 
-				`<div class="loading">Error loading fundamentals: ${errorMsg}<br><small style="color: #6b7280;">Check browser console (F12) for details</small></div>`;
+				`<div class="loading">${userFriendlyMessage}</div>`;
 		}
 	}
 	

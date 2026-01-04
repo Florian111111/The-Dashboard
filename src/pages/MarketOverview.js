@@ -4729,12 +4729,16 @@ export class MarketOverview extends HTMLElement {
 			this.displayMarketSummary(summary, false);
 		} catch (error) {
 			console.error('[AI Market Summary] Error:', error);
-			let errorMessage = error.message || 'Unknown error';
-			if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
-				errorMessage = 'The API is currently busy. Please wait a few seconds and try again.';
+			const errorMessage = error.message || 'Unknown error';
+			// Always show user-friendly message
+			const userFriendlyMessage = 'Too many users are currently using this feature. Please try again later.';
+			content.innerHTML = `<div class="ai-summary-error">${userFriendlyMessage}</div>`;
+			// Re-enable button immediately after error
+			if (aiSummaryBtn) {
+				aiSummaryBtn.disabled = false;
 			}
-			content.innerHTML = `<div class="ai-summary-error">Error loading AI market summary: ${errorMessage}<br><small>Please try again later.</small></div>`;
 		} finally {
+			// Ensure button is always enabled after operation completes
 			if (aiSummaryBtn) {
 				aiSummaryBtn.disabled = false;
 			}

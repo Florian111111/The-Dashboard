@@ -1100,27 +1100,38 @@ export class StockAnalysis extends HTMLElement {
 				return;
 			}
 			
+			// Get icon reference before async operations
+			const icon = refreshBtn.querySelector('.refresh-icon');
+			
+			// Show refreshing state immediately
+			refreshBtn.classList.add('refreshing');
+			if (icon) icon.classList.add('refreshing');
+			
 			// Import clearSymbolCache function
 			import('../utils/cache.js').then(({ clearSymbolCache }) => {
 				// Clear cache for current symbol
 				clearSymbolCache(this.symbol);
 				console.log(`[StockAnalysis] Cleared cache for ${this.symbol}, reloading...`);
 				
-				// Show refreshing state
-				refreshBtn.classList.add('refreshing');
-				const icon = refreshBtn.querySelector('.refresh-icon');
-				if (icon) icon.classList.add('refreshing');
+				// Reload stock data structure (synchronous)
+				this.loadStock(this.symbol);
 				
-				// Reload stock data
-				this.loadStock(this.symbol).finally(() => {
-					// Remove refreshing state after a short delay
-					setTimeout(() => {
-						refreshBtn.classList.remove('refreshing');
-						if (icon) icon.classList.remove('refreshing');
-					}, 1000);
+				// Reload all data (async)
+				this.preloadChartAndData(this.symbol).then(() => {
+					// Remove refreshing state after data is loaded
+					refreshBtn.classList.remove('refreshing');
+					if (icon) icon.classList.remove('refreshing');
+				}).catch(error => {
+					console.error('[StockAnalysis] Error refreshing data:', error);
+					// Always remove refreshing state, even on error
+					refreshBtn.classList.remove('refreshing');
+					if (icon) icon.classList.remove('refreshing');
 				});
 			}).catch(error => {
 				console.error('[StockAnalysis] Error importing cache utils:', error);
+				// Always remove refreshing state, even on error
+				refreshBtn.classList.remove('refreshing');
+				if (icon) icon.classList.remove('refreshing');
 			});
 		});
 	}
@@ -1638,7 +1649,7 @@ export class StockAnalysis extends HTMLElement {
 	preloadChartAndData(symbol) {
 		// Preload ALL component modules in parallel for immediate panel visibility
 		// Then immediately load chart data
-		Promise.all([
+		return Promise.all([
 			import('../components/StockChart.js'),
 			import('../components/StockIndicators.js'),
 			import('../components/StockFundamentals.js'),

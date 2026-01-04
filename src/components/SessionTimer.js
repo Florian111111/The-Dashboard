@@ -9,6 +9,29 @@ export class SessionTimer extends HTMLElement {
 
 	connectedCallback() {
 		this.render();
+		
+		// Check if session exists in localStorage (persistent across page reloads)
+		this.restoreSession();
+	}
+	
+	restoreSession() {
+		const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+		if (sessionEndTimestamp) {
+			const sessionEnd = parseInt(sessionEndTimestamp, 10);
+			const now = Date.now();
+			const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
+			
+			if (remaining > 0) {
+				// Session still active - restore timer
+				console.log('[Session Timer] Restoring session from localStorage:', remaining, 'seconds remaining');
+				this.show(remaining);
+			} else {
+				// Session expired - show rate limit banner
+				console.log('[Session Timer] Session expired, showing rate limit banner');
+				localStorage.removeItem('session_end_timestamp');
+				this.triggerRateLimitBanner();
+			}
+		}
 	}
 
 	disconnectedCallback() {
@@ -25,6 +48,11 @@ export class SessionTimer extends HTMLElement {
 		}
 		
 		this.remainingSeconds = remainingSeconds;
+		
+		// Save session_end timestamp to localStorage (persistent across page reloads)
+		const sessionEndTimestamp = Date.now() + (remainingSeconds * 1000);
+		localStorage.setItem('session_end_timestamp', sessionEndTimestamp.toString());
+		
 		const timerElement = this.shadowRoot.querySelector('.session-timer');
 		if (timerElement) {
 			timerElement.classList.add('show');
@@ -46,6 +74,9 @@ export class SessionTimer extends HTMLElement {
 		
 		this.remainingSeconds = 0;
 		this.updateDisplay();
+		
+		// Remove session_end from localStorage when timer is hidden
+		localStorage.removeItem('session_end_timestamp');
 	}
 
 	startCountdown() {
@@ -56,13 +87,30 @@ export class SessionTimer extends HTMLElement {
 		this.updateDisplay();
 		
 		this.countdownInterval = setInterval(() => {
-			if (this.remainingSeconds > 0) {
-				this.remainingSeconds--;
-				this.updateDisplay();
+			// Recalculate remaining time from localStorage to handle page reloads
+			const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+			if (sessionEndTimestamp) {
+				const sessionEnd = parseInt(sessionEndTimestamp, 10);
+				const now = Date.now();
+				const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
+				
+				if (remaining > 0) {
+					this.remainingSeconds = remaining;
+					this.updateDisplay();
+				} else {
+					// Session expired
+					this.hide();
+					// Session expired - show rate limit banner
+					this.triggerRateLimitBanner();
+				}
 			} else {
-				this.hide();
-				// Session expired - show rate limit banner
-				this.triggerRateLimitBanner();
+				// No session in localStorage - stop countdown
+				if (this.remainingSeconds > 0) {
+					this.remainingSeconds--;
+					this.updateDisplay();
+				} else {
+					this.hide();
+				}
 			}
 		}, 1000);
 	}
@@ -70,6 +118,12 @@ export class SessionTimer extends HTMLElement {
 	triggerRateLimitBanner() {
 		// Show rate limit banner when session expires
 		const COOLDOWN_DURATION = 300; // 5 minutes in seconds
+		
+		// Save cooldown_end timestamp to localStorage (persistent across page reloads)
+		const cooldownEndTimestamp = Date.now() + (COOLDOWN_DURATION * 1000);
+		localStorage.setItem('cooldown_end_timestamp', cooldownEndTimestamp.toString());
+		localStorage.removeItem('session_end_timestamp'); // Remove session timestamp
+		
 		const app = window.app;
 		if (app && app.rateLimitBanner) {
 			console.log('[Session Timer] Session expired, showing rate limit banner');
@@ -77,6 +131,10 @@ export class SessionTimer extends HTMLElement {
 			// Disable search
 			if (app.disableSearchDuringCooldown) {
 				app.disableSearchDuringCooldown();
+			}
+			// Mark session as not started
+			if (app.sessionStarted !== undefined) {
+				app.sessionStarted = false;
 			}
 		}
 	}

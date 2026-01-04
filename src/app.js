@@ -120,14 +120,38 @@ class App {
 			}
 			
 			// Track if session has been started (to show timer on first click)
-			this.sessionStarted = false;
+			// But first check if session exists in localStorage (persistent across reloads)
+			const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+			if (sessionEndTimestamp) {
+				const sessionEnd = parseInt(sessionEndTimestamp, 10);
+				const now = Date.now();
+				const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
+				
+				if (remaining > 0) {
+					// Session still active - timer will be restored by SessionTimer.connectedCallback
+					this.sessionStarted = true;
+					console.log('[App] Session exists in localStorage, will be restored by SessionTimer');
+				} else {
+					// Session expired - remove from localStorage
+					localStorage.removeItem('session_end_timestamp');
+					this.sessionStarted = false;
+				}
+			} else {
+				this.sessionStarted = false;
+			}
 			
 			// Add global click listener to start session timer on first user interaction
 			document.addEventListener('click', (e) => {
 				if (!this.sessionStarted && this.sessionTimer) {
-					console.log('[Session Timer] First click detected, starting session timer');
-					this.sessionStarted = true;
-					this.sessionTimer.show(300); // 5 minutes = 300 seconds
+					// Check again if session exists (might have been restored)
+					const existingSession = localStorage.getItem('session_end_timestamp');
+					if (!existingSession) {
+						console.log('[Session Timer] First click detected, starting session timer');
+						this.sessionStarted = true;
+						this.sessionTimer.show(300); // 5 minutes = 300 seconds
+					} else {
+						this.sessionStarted = true;
+					}
 				}
 			}, { once: false, capture: true });
 
@@ -714,11 +738,14 @@ class App {
 					}
 				} else if (response.ok && response.status >= 200 && response.status < 300) {
 					// Successful API call - hide banner if shown (cooldown ended, user can use site again)
+					// Also remove cooldown from localStorage
 					if (self.rateLimitBanner) {
 						const banner = self.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
 						if (banner && banner.classList.contains('show')) {
 							self.rateLimitBanner.hide();
 							self.enableSearchAfterCooldown();
+							// Cooldown ended - remove from localStorage
+							localStorage.removeItem('cooldown_end_timestamp');
 						}
 					}
 
