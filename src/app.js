@@ -88,6 +88,9 @@ class App {
 			if (!customElements.get('session-timer')) {
 				customElements.define('session-timer', SessionTimer);
 			}
+			if (!customElements.get('mobile-orientation-warning')) {
+				customElements.define('mobile-orientation-warning', MobileOrientationWarning);
+			}
 
 			// Add cookie banner to body
 			if (!document.querySelector('cookie-banner')) {

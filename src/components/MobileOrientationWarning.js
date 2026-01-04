@@ -8,14 +8,30 @@ export class MobileOrientationWarning extends HTMLElement {
 	}
 
 	connectedCallback() {
-		this.checkAndShow();
+		console.log('[MobileOrientationWarning] connectedCallback called');
+		
+		// Always render first
+		this.render();
+		this.rendered = true;
+		
+		// Use requestAnimationFrame to ensure DOM is fully ready
+		requestAnimationFrame(() => {
+			console.log('[MobileOrientationWarning] requestAnimationFrame callback');
+			this.checkAndShow();
+			// Also check after a small delay as fallback
+			setTimeout(() => {
+				console.log('[MobileOrientationWarning] setTimeout callback');
+				this.checkAndShow();
+			}, 300);
+		});
+		
 		// Only listen for orientation changes, not resize events
 		// This prevents the warning from reappearing when the screen moves
 		window.addEventListener('orientationchange', () => {
 			// Only check on orientation change, not on every resize
 			// The warning should only show once per page load if dismissed
 			if (!this.isDismissed()) {
-				setTimeout(() => this.checkAndShow(), 100);
+				setTimeout(() => this.checkAndShow(), 300);
 			}
 		});
 	}
@@ -26,46 +42,65 @@ export class MobileOrientationWarning extends HTMLElement {
 	}
 
 	isDismissed() {
-		// Check if user has dismissed the warning in this session
-		// Using sessionStorage so it only persists until page reload
-		return sessionStorage.getItem(this.storageKey) === 'true';
+		// Check if user has dismissed the warning in this page load only
+		// Not using sessionStorage - modal should appear on every page reload
+		return this.dismissed === true;
 	}
 
 	setDismissed() {
-		// Mark as dismissed for this session
-		sessionStorage.setItem(this.storageKey, 'true');
+		// Mark as dismissed for this page load only (not persisted)
 		this.dismissed = true;
 	}
 
 	checkAndShow() {
+		console.log('[MobileOrientationWarning] checkAndShow called');
+		
 		// Check if user has already dismissed the warning
-		if (this.isDismissed()) {
+		const dismissed = this.isDismissed();
+		console.log('[MobileOrientationWarning] isDismissed:', dismissed);
+		
+		if (dismissed) {
+			// Ensure overlay is hidden if dismissed
+			const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
+			if (overlay) {
+				overlay.classList.remove('show');
+			}
+			console.log('[MobileOrientationWarning] Modal dismissed, hiding');
 			return;
 		}
 
 		// Check if mobile device
-		if (!this.isMobileDevice()) {
+		const isMobile = this.isMobileDevice();
+		console.log('[MobileOrientationWarning] isMobileDevice:', isMobile, 'window.innerWidth:', window.innerWidth, 'window.innerHeight:', window.innerHeight);
+		
+		if (!isMobile) {
 			// Hide warning if not on mobile
 			const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 			if (overlay) {
 				overlay.classList.remove('show');
 			}
+			console.log('[MobileOrientationWarning] Not a mobile device, hiding');
 			return;
 		}
 
-		// Check if overlay already exists
+		// Get overlay - it should exist after render()
 		let overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
+		console.log('[MobileOrientationWarning] Overlay found:', !!overlay);
 		
-		// Only render once - if overlay doesn't exist or hasn't been rendered, create it
-		if (!overlay || !this.rendered) {
+		// If overlay doesn't exist, render it
+		if (!overlay) {
+			console.log('[MobileOrientationWarning] Overlay not found, re-rendering');
 			this.render();
 			this.rendered = true;
 			overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 		}
 		
-		// Show warning if overlay exists and not already shown
-		if (overlay && !overlay.classList.contains('show')) {
+		// Show warning
+		if (overlay) {
+			console.log('[MobileOrientationWarning] Showing modal');
 			overlay.classList.add('show');
+		} else {
+			console.error('[MobileOrientationWarning] Overlay still not found after render!');
 		}
 	}
 
@@ -369,42 +404,50 @@ export class MobileOrientationWarning extends HTMLElement {
 				/* Extra small phones in portrait */
 				@media (max-width: 360px) and (orientation: portrait) {
 					.warning-content {
-						padding: 25px 15px !important;
+						padding: 40px 25px !important;
 					}
 
 					.warning-title {
-						font-size: 1.8rem !important;
-						margin-bottom: 20px !important;
+						font-size: 2rem !important;
+						margin-bottom: 28px !important;
 					}
 
 					.warning-message {
-						font-size: 1.1rem !important;
-						line-height: 1.4 !important;
-						margin-bottom: 20px !important;
+						font-size: 1.25rem !important;
+						line-height: 1.6 !important;
+						margin-bottom: 28px !important;
 					}
 
 					.recommendation {
-						font-size: 1rem !important;
-						margin-top: 20px !important;
-						padding-top: 20px !important;
-						line-height: 1.3 !important;
+						font-size: 1.15rem !important;
+						margin-top: 28px !important;
+						padding-top: 28px !important;
+						line-height: 1.5 !important;
 					}
 
 					.phone-icon {
-						width: 90px !important;
-						height: 160px !important;
+						width: 110px !important;
+						height: 200px !important;
 					}
 
 					.phone-icon-container {
-						height: 140px !important;
-						margin-bottom: 25px !important;
+						height: 170px !important;
+						margin-bottom: 35px !important;
+					}
+					
+					.close-button {
+						width: 54px !important;
+						height: 54px !important;
+						font-size: 30px !important;
+						top: 28px !important;
+						right: 28px !important;
 					}
 				}
 
 				/* Portrait mode - fullscreen - MUST BE LAST to override all other styles */
 				@media (orientation: portrait) and (max-width: 1024px) {
 					.warning-content {
-						padding: 30px 25px !important;
+						padding: 50px 35px !important;
 						max-width: 100vw !important;
 						width: 100vw !important;
 						min-height: 100vh !important;
@@ -424,40 +467,40 @@ export class MobileOrientationWarning extends HTMLElement {
 					}
 					
 					.warning-title {
-						font-size: 1.8rem !important;
-						margin-bottom: 25px !important;
+						font-size: 2.5rem !important;
+						margin-bottom: 35px !important;
 						line-height: 1.3 !important;
 					}
 					
 					.warning-message {
-						font-size: 1.1rem !important;
-						line-height: 1.5 !important;
-						margin-bottom: 25px !important;
+						font-size: 1.5rem !important;
+						line-height: 1.7 !important;
+						margin-bottom: 35px !important;
 					}
 					
 					.recommendation {
-						font-size: 1rem !important;
-						margin-top: 25px !important;
-						padding-top: 25px !important;
-						line-height: 1.4 !important;
+						font-size: 1.3rem !important;
+						margin-top: 35px !important;
+						padding-top: 35px !important;
+						line-height: 1.6 !important;
 					}
 					
 					.phone-icon {
-						width: 100px !important;
-						height: 180px !important;
+						width: 140px !important;
+						height: 240px !important;
 					}
 					
 					.phone-icon-container {
-						height: 150px !important;
-						margin-bottom: 30px !important;
+						height: 200px !important;
+						margin-bottom: 50px !important;
 					}
 					
 					.close-button {
-						width: 50px !important;
-						height: 50px !important;
-						font-size: 28px !important;
-						top: 25px !important;
-						right: 25px !important;
+						width: 60px !important;
+						height: 60px !important;
+						font-size: 36px !important;
+						top: 35px !important;
+						right: 35px !important;
 					}
 				}
 			</style>
