@@ -2413,11 +2413,16 @@ export class MarketOverview extends HTMLElement {
 		// Setup touch gestures for mobile
 		this.setupTouchGestures();
 
-		// Load market data AFTER theme is set
-		this.loadMarketData();
-
-		// Top Performers ticker setup
-		this.setupTopPerformersTicker();
+		// Load market data AFTER theme is set (non-blocking)
+		// Defer top performers ticker to load after main content
+		setTimeout(() => {
+			this.loadMarketData();
+		}, 0);
+		
+		// Top Performers ticker setup - defer to not block initial render
+		setTimeout(() => {
+			this.setupTopPerformersTicker();
+		}, 100);
 
 		// Mobile rotate overlay - continue button
 		// Check if already dismissed (same storage key as MobileOrientationWarning)

@@ -14,19 +14,63 @@ export class StockAnalysis extends HTMLElement {
 	attributeChangedCallback(name, oldValue, newValue) {
 		if (name === 'symbol' && newValue !== oldValue && newValue) {
 			this.symbol = newValue;
+			// Wait for connectedCallback to complete before loading
 			if (this.shadowRoot && this.shadowRoot.innerHTML) {
-				// Set the input value and load the stock
 				const input = this.shadowRoot.getElementById('symbol-input');
 				if (input) {
 					input.value = newValue;
-					this.loadStock(newValue);
 				}
+				// Use requestAnimationFrame to ensure DOM is ready
+				requestAnimationFrame(() => {
+					this.loadStock(newValue);
+				});
 			}
 		}
 	}
 	
 	connectedCallback() {
-		this.symbol = this.getAttribute('symbol');
+		// Get symbol immediately - check attribute, then URL
+		let symbol = this.getAttribute('symbol');
+		if (!symbol) {
+			const path = window.location.pathname;
+			if (path.startsWith('/stock/')) {
+				symbol = decodeURIComponent(path.split('/stock/')[1].split('/')[0].split('?')[0]);
+			}
+		}
+		this.symbol = symbol;
+		
+		// Generate initial content HTML based on whether symbol exists
+		// Chart is rendered FIRST for immediate visibility
+		const initialContentHTML = symbol ? `
+			<div style="display: grid; gap: 15px; max-width: 1400px; width: 100%; margin: 0 auto; box-sizing: border-box;">
+				<!-- Chart rendered FIRST for immediate visibility -->
+				<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; align-items: stretch; min-width: 0;">
+					<stock-chart symbol="${symbol}" style="min-width: 0; overflow: hidden; order: -1;"></stock-chart>
+					<stock-description symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-description>
+				</div>
+				<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; min-width: 0;">
+					<stock-indicators symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-indicators>
+					<stock-fundamentals symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-fundamentals>
+					<stock-peer-comparison symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-peer-comparison>
+				</div>
+				<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; min-width: 0;">
+					<stock-analyst-recommendation symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-analyst-recommendation>
+					<stock-analyst-timeline symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-analyst-timeline>
+					<stock-earnings symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-earnings>
+				</div>
+				<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; min-width: 0;">
+					<stock-risk-analysis symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-risk-analysis>
+					<stock-sentiment symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-sentiment>
+				</div>
+				<stock-news symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-news>
+				<stock-swot symbol="${symbol}" style="min-width: 0; overflow: hidden;"></stock-swot>
+			</div>
+		` : `
+			<div style="text-align: center; color: #9fb0c0; padding: 40px;">
+				Enter a stock symbol to begin analysis
+			</div>
+		`;
+		
 		this.shadowRoot.innerHTML = `
 			<style>
 				/* ========== THEME VARIABLES ========== */
@@ -957,9 +1001,7 @@ export class StockAnalysis extends HTMLElement {
 				</div>
 			</div>
 			<div class="content" id="content">
-				<div style="text-align: center; color: #9fb0c0; padding: 40px;">
-					Enter a stock symbol to begin analysis
-				</div>
+				${initialContentHTML}
 			</div>
 			<div class="loading-overlay hidden" id="loading-overlay">
 				<div class="loading-content">
@@ -1026,41 +1068,21 @@ export class StockAnalysis extends HTMLElement {
 			window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'disclaimer' } }));
 		});
 		
-		// If symbol is provided as attribute, load it automatically
-		// Use multiple fallbacks to ensure symbol is loaded even on direct URL access
-		const checkAndLoadSymbol = () => {
-			// Try multiple ways to get the symbol
-			let symbol = this.symbol || this.getAttribute('symbol');
-			
-			// If still no symbol, try to parse from URL (for direct access)
-			if (!symbol) {
-				const path = window.location.pathname;
-				if (path.startsWith('/stock/')) {
-					symbol = decodeURIComponent(path.split('/stock/')[1].split('/')[0].split('?')[0]);
-				}
+		// If symbol exists, set input value and load data (components already rendered)
+		if (symbol) {
+			console.log('[StockAnalysis] Symbol found on load:', symbol);
+			const input = this.shadowRoot.getElementById('symbol-input');
+			if (input) {
+				input.value = symbol;
 			}
-			
-			if (symbol) {
-				console.log('[StockAnalysis] Symbol found on load:', symbol);
-				this.symbol = symbol;
-				requestAnimationFrame(() => {
-					const input = this.shadowRoot.getElementById('symbol-input');
-					if (input) {
-						input.value = symbol;
-					}
-					// Always load stock, even if input not found yet
-					this.loadStock(symbol);
-				});
-			} else {
-				console.log('[StockAnalysis] No symbol provided on load');
-			}
-		};
-		
-		// Try immediately
-		checkAndLoadSymbol();
-		
-		// Also try after a short delay to catch any timing issues
-		setTimeout(checkAndLoadSymbol, 100);
+			// Update page title and load data (components already in DOM)
+			const pageTitle = this.shadowRoot.getElementById('page-title');
+			this.updatePageTitle(symbol, pageTitle);
+			// Preload chart module FIRST for immediate visibility, then load other data
+			this.preloadChartAndData(symbol);
+		} else {
+			console.log('[StockAnalysis] No symbol provided on load');
+		}
 	}
 	
 	setupRefreshButton() {
@@ -1556,12 +1578,18 @@ export class StockAnalysis extends HTMLElement {
 		}
 	}
 	
-	async loadStock(symbol) {
+	loadStock(symbol) {
 		this.symbol = symbol;
 		
 		const content = this.shadowRoot.getElementById('content');
 		const loadingOverlay = this.shadowRoot.getElementById('loading-overlay');
 		const pageTitle = this.shadowRoot.getElementById('page-title');
+		
+		// Content element should always exist from connectedCallback
+		if (!content) {
+			console.error('[StockAnalysis] Content element not found');
+			return;
+		}
 		
 		// Don't show loading overlay - render components immediately
 		if (loadingOverlay) {
@@ -1569,7 +1597,7 @@ export class StockAnalysis extends HTMLElement {
 			loadingOverlay.style.display = 'none';
 		}
 		
-		// Fetch company name for the header
+		// Fetch company name for the header (async, non-blocking)
 		this.updatePageTitle(symbol, pageTitle);
 		
 		// Render components IMMEDIATELY - don't wait for anything
@@ -1599,12 +1627,70 @@ export class StockAnalysis extends HTMLElement {
 			</div>
 		`;
 		
-		// Hide overlay immediately so chart can load
-		if (loadingOverlay) {
-			loadingOverlay.classList.add('hidden');
-			loadingOverlay.style.display = 'none';
-		}
+		// Ensure content is visible immediately
+		content.style.display = 'block';
+		content.style.visibility = 'visible';
 		
+		// Load aggregated data in background (non-blocking)
+		this.loadAggregatedData(symbol);
+	}
+	
+	preloadChartAndData(symbol) {
+		// Preload ALL component modules in parallel for immediate panel visibility
+		// Then immediately load chart data
+		Promise.all([
+			import('../components/StockChart.js'),
+			import('../components/StockIndicators.js'),
+			import('../components/StockFundamentals.js'),
+			import('../components/StockPeerComparison.js'),
+			import('../components/StockSwot.js'),
+			import('../components/StockNews.js'),
+			import('../components/StockAnalystRecommendation.js'),
+			import('../components/StockAnalystTimeline.js'),
+			import('../components/StockEarnings.js'),
+			import('../components/StockSentiment.js'),
+			import('../components/StockDescription.js'),
+			import('../components/StockRiskAnalysis.js')
+		]).then(([
+			chartModule,
+			indicatorsModule,
+			fundamentalsModule,
+			peerModule,
+			swotModule,
+			newsModule,
+			analystRecModule,
+			analystTimelineModule,
+			earningsModule,
+			sentimentModule,
+			descriptionModule,
+			riskModule
+		]) => {
+			// Define all custom elements immediately so panels are visible
+			if (!customElements.get('stock-chart')) customElements.define('stock-chart', chartModule.StockChart);
+			if (!customElements.get('stock-indicators')) customElements.define('stock-indicators', indicatorsModule.StockIndicators);
+			if (!customElements.get('stock-fundamentals')) customElements.define('stock-fundamentals', fundamentalsModule.StockFundamentals);
+			if (!customElements.get('stock-peer-comparison')) customElements.define('stock-peer-comparison', peerModule.StockPeerComparison);
+			if (!customElements.get('stock-swot')) customElements.define('stock-swot', swotModule.StockSwot);
+			if (!customElements.get('stock-news')) customElements.define('stock-news', newsModule.StockNews);
+			if (!customElements.get('stock-analyst-recommendation')) customElements.define('stock-analyst-recommendation', analystRecModule.StockAnalystRecommendation);
+			if (!customElements.get('stock-analyst-timeline')) customElements.define('stock-analyst-timeline', analystTimelineModule.StockAnalystTimeline);
+			if (!customElements.get('stock-earnings')) customElements.define('stock-earnings', earningsModule.StockEarnings);
+			if (!customElements.get('stock-sentiment')) customElements.define('stock-sentiment', sentimentModule.StockSentiment);
+			if (!customElements.get('stock-description')) customElements.define('stock-description', descriptionModule.StockDescription);
+			if (!customElements.get('stock-risk-analysis')) customElements.define('stock-risk-analysis', riskModule.StockRiskAnalysis);
+			
+			console.log('[StockAnalysis] All component modules preloaded - panels should be visible');
+			
+			// Now load data (chart will load immediately, other components will show empty panels)
+			this.loadAggregatedData(symbol);
+		}).catch(error => {
+			console.warn('[StockAnalysis] Error preloading components:', error);
+			// Continue anyway - will be loaded later
+			this.loadAggregatedData(symbol);
+		});
+	}
+	
+	loadAggregatedData(symbol) {
 		// Load aggregated stock overview data and import components in parallel (non-blocking)
 		// This happens in the background while components are already visible
 		Promise.all([
@@ -1657,67 +1743,28 @@ export class StockAnalysis extends HTMLElement {
 					console.warn(`[StockAnalysis] Error loading aggregated data:`, error);
 				}
 			})(),
-			// Import components
+			// Components already loaded in preloadChartAndData, just ensure initialization
 			(async () => {
 				try {
-					// Load all modules in parallel
-					const [
-						chartModule,
-						indicatorsModule,
-						fundamentalsModule,
-						peerModule,
-						swotModule,
-						newsModule,
-						analystRecModule,
-						analystTimelineModule,
-						earningsModule,
-						sentimentModule,
-						descriptionModule,
-						riskModule
-					] = await Promise.all([
-						import('../components/StockChart.js'),
-						import('../components/StockIndicators.js'),
-						import('../components/StockFundamentals.js'),
-						import('../components/StockPeerComparison.js'),
-						import('../components/StockSwot.js'),
-						import('../components/StockNews.js'),
-						import('../components/StockAnalystRecommendation.js'),
-						import('../components/StockAnalystTimeline.js'),
-						import('../components/StockEarnings.js'),
-						import('../components/StockSentiment.js'),
-						import('../components/StockDescription.js'),
-						import('../components/StockRiskAnalysis.js')
-					]);
-					
-					// Define custom elements if not already defined
-					if (!customElements.get('stock-chart')) customElements.define('stock-chart', chartModule.StockChart);
-					if (!customElements.get('stock-indicators')) customElements.define('stock-indicators', indicatorsModule.StockIndicators);
-					if (!customElements.get('stock-fundamentals')) customElements.define('stock-fundamentals', fundamentalsModule.StockFundamentals);
-					if (!customElements.get('stock-peer-comparison')) customElements.define('stock-peer-comparison', peerModule.StockPeerComparison);
-					if (!customElements.get('stock-swot')) customElements.define('stock-swot', swotModule.StockSwot);
-					if (!customElements.get('stock-news')) customElements.define('stock-news', newsModule.StockNews);
-					if (!customElements.get('stock-analyst-recommendation')) customElements.define('stock-analyst-recommendation', analystRecModule.StockAnalystRecommendation);
-					if (!customElements.get('stock-analyst-timeline')) customElements.define('stock-analyst-timeline', analystTimelineModule.StockAnalystTimeline);
-					if (!customElements.get('stock-earnings')) customElements.define('stock-earnings', earningsModule.StockEarnings);
-					if (!customElements.get('stock-sentiment')) customElements.define('stock-sentiment', sentimentModule.StockSentiment);
-					if (!customElements.get('stock-description')) customElements.define('stock-description', descriptionModule.StockDescription);
-					if (!customElements.get('stock-risk-analysis')) customElements.define('stock-risk-analysis', riskModule.StockRiskAnalysis);
-					
-					// Ensure components are properly initialized after DOM update
-					setTimeout(() => {
-						// Apply current theme to all child components
-						const isLightMode = this.classList.contains('light-mode');
-						this.updateChildComponentsTheme(isLightMode);
-						
-						// Force attribute change to trigger data loading if needed
-						const components = content.querySelectorAll('stock-chart, stock-indicators, stock-fundamentals, stock-peer-comparison, stock-swot, stock-analyst-recommendation, stock-analyst-timeline, stock-earnings, stock-sentiment, stock-risk-analysis');
-						components.forEach(comp => {
-							if (comp.hasAttribute('symbol')) {
-								const sym = comp.getAttribute('symbol');
-								comp.setAttribute('symbol', sym); // Trigger attributeChangedCallback
-							}
-						});
-					}, 100);
+					// Components are already defined, just ensure they're initialized
+					const content = this.shadowRoot.getElementById('content');
+					if (content) {
+						// Ensure components are properly initialized after DOM update
+						setTimeout(() => {
+							// Apply current theme to all child components
+							const isLightMode = this.classList.contains('light-mode');
+							this.updateChildComponentsTheme(isLightMode);
+							
+							// Force attribute change to trigger data loading if needed
+							const components = content.querySelectorAll('stock-chart, stock-indicators, stock-fundamentals, stock-peer-comparison, stock-swot, stock-analyst-recommendation, stock-analyst-timeline, stock-earnings, stock-sentiment, stock-risk-analysis');
+							components.forEach(comp => {
+								if (comp.hasAttribute('symbol')) {
+									const sym = comp.getAttribute('symbol');
+									comp.setAttribute('symbol', sym); // Trigger attributeChangedCallback
+								}
+							});
+						}, 100);
+					}
 				} catch (error) {
 					console.error('Error importing components:', error);
 					// Don't show error - components might already be defined from previous load
