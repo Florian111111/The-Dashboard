@@ -61,8 +61,24 @@ export class SessionTimer extends HTMLElement {
 				this.updateDisplay();
 			} else {
 				this.hide();
+				// Session expired - show rate limit banner
+				this.triggerRateLimitBanner();
 			}
 		}, 1000);
+	}
+
+	triggerRateLimitBanner() {
+		// Show rate limit banner when session expires
+		const COOLDOWN_DURATION = 300; // 5 minutes in seconds
+		const app = window.app;
+		if (app && app.rateLimitBanner) {
+			console.log('[Session Timer] Session expired, showing rate limit banner');
+			app.rateLimitBanner.show(COOLDOWN_DURATION, 'session_cooldown', 0, 0, 0);
+			// Disable search
+			if (app.disableSearchDuringCooldown) {
+				app.disableSearchDuringCooldown();
+			}
+		}
 	}
 
 	updateDisplay() {

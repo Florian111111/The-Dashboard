@@ -402,20 +402,22 @@ async def add_session_remaining_header(request: Request, call_next):
             # Get client IP
             client_ip = get_remote_address(request)
             
-            # Check session rate limit (without starting a new session)
+            # Check if session exists and is active
             if client_ip in session_rate_limit_cache:
                 entry = session_rate_limit_cache[client_ip]
                 now = time.time()
                 
-                # Check if session is active
+                # Check if session is active (not in cooldown and session_end exists and is in future)
                 if entry.get('session_end') and now < entry['session_end']:
                     session_remaining = int(entry['session_end'] - now)
                     response.headers["X-Session-Remaining"] = str(session_remaining)
                 else:
-                    # No active session
+                    # No active session (either expired or in cooldown)
                     response.headers["X-Session-Remaining"] = "0"
             else:
-                # No session in cache
+                # No session in cache - check if we should have started one
+                # For endpoints that start sessions, the session should now be in cache
+                # If not, it means the endpoint doesn't use session rate limiting
                 response.headers["X-Session-Remaining"] = "0"
     
     return response

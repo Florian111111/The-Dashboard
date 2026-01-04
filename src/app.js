@@ -106,6 +106,8 @@ class App {
 				const rateLimitBanner = document.createElement('rate-limit-banner');
 				document.body.appendChild(rateLimitBanner);
 				this.rateLimitBanner = rateLimitBanner;
+			} else {
+				this.rateLimitBanner = document.querySelector('rate-limit-banner');
 			}
 
 			// Add session timer to body
@@ -114,8 +116,20 @@ class App {
 				document.body.appendChild(sessionTimer);
 				this.sessionTimer = sessionTimer;
 			} else {
-				this.rateLimitBanner = document.querySelector('rate-limit-banner');
+				this.sessionTimer = document.querySelector('session-timer');
 			}
+			
+			// Track if session has been started (to show timer on first click)
+			this.sessionStarted = false;
+			
+			// Add global click listener to start session timer on first user interaction
+			document.addEventListener('click', (e) => {
+				if (!this.sessionStarted && this.sessionTimer) {
+					console.log('[Session Timer] First click detected, starting session timer');
+					this.sessionStarted = true;
+					this.sessionTimer.show(300); // 5 minutes = 300 seconds
+				}
+			}, { once: false, capture: true });
 
 			// Add mobile orientation warning to body
 			if (!document.querySelector('mobile-orientation-warning')) {
@@ -712,18 +726,24 @@ class App {
 					const sessionRemaining = response.headers.get('X-Session-Remaining');
 					if (sessionRemaining !== null) {
 						const remainingSeconds = parseInt(sessionRemaining, 10);
+						console.log('[Session Timer] X-Session-Remaining header:', sessionRemaining, 'seconds:', remainingSeconds);
 						if (!isNaN(remainingSeconds) && remainingSeconds > 0) {
-							// Show session timer with remaining time
+							// Update session timer with remaining time from backend (sync with backend time)
 							if (self.sessionTimer) {
+								console.log('[Session Timer] Updating timer with', remainingSeconds, 'seconds');
 								self.sessionTimer.show(remainingSeconds);
+							} else {
+								console.warn('[Session Timer] sessionTimer element not found!');
 							}
 						} else {
-							// Hide session timer if session expired
+							// Session expired - hide timer (banner will be shown by SessionTimer.triggerRateLimitBanner)
 							if (self.sessionTimer) {
+								console.log('[Session Timer] Hiding timer (session expired or no session)');
 								self.sessionTimer.hide();
 							}
 						}
 					}
+					// Note: Don't hide timer if header is missing - it might be shown by click listener
 				}
 
 				return response;
