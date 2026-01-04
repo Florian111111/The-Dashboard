@@ -104,7 +104,22 @@ class App {
 				}
 			}
 
-			// Add rate limit banner to body
+			// FIRST: Check if cooldown period is active - if so, delete session_end_timestamp immediately
+			const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+			let cooldownActive = false;
+			if (cooldownEndTimestamp) {
+				const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+				const now = Date.now();
+				const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+				if (cooldownRemaining > 0) {
+					cooldownActive = true;
+					console.log('[App] Cooldown period active, cannot start session. Remaining:', cooldownRemaining, 'seconds');
+					// CRITICAL: Delete session_end_timestamp immediately if cooldown is active
+					localStorage.removeItem('session_end_timestamp');
+				}
+			}
+			
+			// Add rate limit banner to body FIRST (so it can restore cooldown before SessionTimer tries to restore session)
 			if (!document.querySelector('rate-limit-banner')) {
 				const rateLimitBanner = document.createElement('rate-limit-banner');
 				document.body.appendChild(rateLimitBanner);
@@ -113,7 +128,7 @@ class App {
 				this.rateLimitBanner = document.querySelector('rate-limit-banner');
 			}
 
-			// Add session timer to body
+			// Add session timer to body AFTER rate limit banner
 			if (!document.querySelector('session-timer')) {
 				const sessionTimer = document.createElement('session-timer');
 				document.body.appendChild(sessionTimer);
@@ -123,29 +138,47 @@ class App {
 			}
 			
 			// Track if session has been started (to show timer on first click)
-			// But first check if session exists in localStorage (persistent across reloads)
-			const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
-			if (sessionEndTimestamp) {
-				const sessionEnd = parseInt(sessionEndTimestamp, 10);
-				const now = Date.now();
-				const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
-				
-				if (remaining > 0) {
-					// Session still active - timer will be restored by SessionTimer.connectedCallback
-					this.sessionStarted = true;
-					console.log('[App] Session exists in localStorage, will be restored by SessionTimer');
+			// Only restore session if cooldown is NOT active
+			if (!cooldownActive) {
+				const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+				if (sessionEndTimestamp) {
+					const sessionEnd = parseInt(sessionEndTimestamp, 10);
+					const now = Date.now();
+					const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
+					
+					if (remaining > 0) {
+						// Session still active - timer will be restored by SessionTimer.connectedCallback
+						this.sessionStarted = true;
+						console.log('[App] Session exists in localStorage, will be restored by SessionTimer');
+					} else {
+						// Session expired - remove from localStorage
+						localStorage.removeItem('session_end_timestamp');
+						this.sessionStarted = false;
+					}
 				} else {
-					// Session expired - remove from localStorage
-					localStorage.removeItem('session_end_timestamp');
 					this.sessionStarted = false;
 				}
 			} else {
+				// Cooldown active - don't allow session start
 				this.sessionStarted = false;
 			}
 			
 			// Add global click listener to start session timer on first user interaction
 			document.addEventListener('click', (e) => {
 				if (!this.sessionStarted && this.sessionTimer) {
+					// Check if cooldown period is active - if so, don't start session
+					const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+					if (cooldownEndTimestamp) {
+						const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+						const now = Date.now();
+						const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+						if (cooldownRemaining > 0) {
+							// Cooldown is still active - don't start session
+							console.log('[Session Timer] Cooldown period active, cannot start session. Remaining:', cooldownRemaining, 'seconds');
+							return;
+						}
+					}
+					
 					// Check again if session exists (might have been restored)
 					const existingSession = localStorage.getItem('session_end_timestamp');
 					if (!existingSession) {
@@ -740,14 +773,27 @@ class App {
 						console.warn('Session limit exceeded. Please wait before making another request');
 					}
 				} else if (response.ok && response.status >= 200 && response.status < 300) {
-					// Successful API call - hide banner if shown (cooldown ended, user can use site again)
-					// Also remove cooldown from localStorage
-					if (self.rateLimitBanner) {
+					// Successful API call - DO NOT hide banner if cooldown is active
+					// Banner should only be hidden when cooldown period actually expires (handled by startCountdown)
+					// Check if cooldown is still active before hiding
+					const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+					let cooldownStillActive = false;
+					if (cooldownEndTimestamp) {
+						const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+						const now = Date.now();
+						const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+						// If cooldown is still active, DO NOT hide the banner
+						if (cooldownRemaining > 0) {
+							cooldownStillActive = true;
+						}
+					}
+					// Only hide banner if cooldown is NOT active
+					if (!cooldownStillActive && self.rateLimitBanner) {
 						const banner = self.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
 						if (banner && banner.classList.contains('show')) {
+							// Cooldown expired - hide banner
 							self.rateLimitBanner.hide();
 							self.enableSearchAfterCooldown();
-							// Cooldown ended - remove from localStorage
 							localStorage.removeItem('cooldown_end_timestamp');
 						}
 					}

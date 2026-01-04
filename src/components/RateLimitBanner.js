@@ -24,13 +24,28 @@ export class RateLimitBanner extends HTMLElement {
 			const remaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
 			
 			if (remaining > 0) {
-				// Cooldown still active - restore banner
+				// Cooldown still active - restore banner WITHOUT overwriting the timestamp
 				console.log('[Rate Limit Banner] Restoring cooldown from localStorage:', remaining, 'seconds remaining');
+				// Set properties directly without calling show() which would overwrite the timestamp
+				this.retryAfter = remaining;
+				this.limitType = 'session_cooldown';
+				this.limit = 0;
+				this.window = 0;
+				this.sessionRemaining = 0;
+				
+				// Render and show banner
+				this.render();
+				this.startCountdown();
+				const banner = this.shadowRoot.querySelector('.rate-limit-banner');
+				if (banner) {
+					banner.classList.add('show');
+				}
+				
+				// Disable search
 				const app = window.app;
 				if (app && app.disableSearchDuringCooldown) {
 					app.disableSearchDuringCooldown();
 				}
-				this.show(remaining, 'session_cooldown', 0, 0, 0);
 			} else {
 				// Cooldown expired - remove from localStorage
 				console.log('[Rate Limit Banner] Cooldown expired');

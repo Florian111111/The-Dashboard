@@ -15,6 +15,20 @@ export class SessionTimer extends HTMLElement {
 	}
 	
 	restoreSession() {
+		// First check if cooldown period is active - if so, don't restore session
+		const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+		if (cooldownEndTimestamp) {
+			const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+			const now = Date.now();
+			const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+			if (cooldownRemaining > 0) {
+				// Cooldown active - don't restore session, remove session timestamp
+				console.log('[Session Timer] Cooldown period active, cannot restore session. Remaining:', cooldownRemaining, 'seconds');
+				localStorage.removeItem('session_end_timestamp');
+				return;
+			}
+		}
+		
 		const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
 		if (sessionEndTimestamp) {
 			const sessionEnd = parseInt(sessionEndTimestamp, 10);
