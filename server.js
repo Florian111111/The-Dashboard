@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const path = require('path');
-const fs = require('fs');
 
 // Load environment variables from .env file
 require('dotenv').config();
@@ -540,24 +539,11 @@ app.get('/api/fred/observations', async (req, res) => {
 	}
 });
 
-// Prepare index.html with conditional tracking script
-const indexHtmlPath = path.join(__dirname, 'index.html');
-let indexHtmlContent = fs.readFileSync(indexHtmlPath, 'utf8');
-
-// Inject Umami tracking script only if TRACKING environment variable is set
-if (process.env.TRACKING) {
-	const trackingScript = '\t<script defer src="https://umami.markets-insights.com/script.js" data-website-id="a9803f61-748c-4705-b2bd-6dcf54102ae1"></script>\n';
-	const insertPosition = indexHtmlContent.indexOf('</head>');
-	if (insertPosition !== -1) {
-		indexHtmlContent = indexHtmlContent.slice(0, insertPosition) + trackingScript + indexHtmlContent.slice(insertPosition);
-	}
-}
-
 // Serve index.html for all other routes (SPA routing)
 // This must come LAST - after all API routes and static file serving
 // express.static will handle actual file requests before this route is reached
 app.get('*', (req, res) => {
-	res.send(indexHtmlContent);
+	res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
