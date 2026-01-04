@@ -11,6 +11,47 @@ export class RateLimitBanner extends HTMLElement {
 
 	connectedCallback() {
 		this.render();
+		
+		// Check if cooldown exists in localStorage (persistent across page reloads)
+		this.restoreCooldown();
+	}
+	
+	restoreCooldown() {
+		const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+		if (cooldownEndTimestamp) {
+			const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+			const now = Date.now();
+			const remaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+			
+			if (remaining > 0) {
+				// Cooldown still active - restore banner WITHOUT overwriting the timestamp
+				console.log('[Rate Limit Banner] Restoring cooldown from localStorage:', remaining, 'seconds remaining');
+				// Set properties directly without calling show() which would overwrite the timestamp
+				this.retryAfter = remaining;
+				this.limitType = 'session_cooldown';
+				this.limit = 0;
+				this.window = 0;
+				this.sessionRemaining = 0;
+				
+				// Render and show banner
+				this.render();
+				this.startCountdown();
+				const banner = this.shadowRoot.querySelector('.rate-limit-banner');
+				if (banner) {
+					banner.classList.add('show');
+				}
+				
+				// Disable search
+				const app = window.app;
+				if (app && app.disableSearchDuringCooldown) {
+					app.disableSearchDuringCooldown();
+				}
+			} else {
+				// Cooldown expired - remove from localStorage
+				console.log('[Rate Limit Banner] Cooldown expired');
+				localStorage.removeItem('cooldown_end_timestamp');
+			}
+		}
 	}
 
 	disconnectedCallback() {
@@ -25,6 +66,13 @@ export class RateLimitBanner extends HTMLElement {
 		this.limit = limit;
 		this.window = window;
 		this.sessionRemaining = sessionRemaining;
+		
+		// Save cooldown_end timestamp to localStorage (persistent across page reloads)
+		if (retryAfter > 0) {
+			const cooldownEndTimestamp = Date.now() + (retryAfter * 1000);
+			localStorage.setItem('cooldown_end_timestamp', cooldownEndTimestamp.toString());
+		}
+		
 		this.render();
 		this.startCountdown();
 		this.shadowRoot.querySelector('.rate-limit-banner').classList.add('show');
@@ -38,6 +86,9 @@ export class RateLimitBanner extends HTMLElement {
 		if (banner) {
 			banner.classList.remove('show');
 		}
+		
+		// Remove cooldown_end from localStorage when banner is hidden
+		localStorage.removeItem('cooldown_end_timestamp');
 	}
 
 	startCountdown() {
@@ -48,9 +99,20 @@ export class RateLimitBanner extends HTMLElement {
 		const countdownElement = this.shadowRoot.querySelector('.countdown-time');
 		if (!countdownElement) return;
 
-		let remaining = this.retryAfter;
-
 		const updateCountdown = () => {
+			// Recalculate remaining time from localStorage to handle page reloads
+			const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+			let remaining = 0;
+			
+			if (cooldownEndTimestamp) {
+				const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+				const now = Date.now();
+				remaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+			} else {
+				// Fallback to this.retryAfter if no localStorage entry
+				remaining = this.retryAfter;
+			}
+			
 			if (remaining <= 0) {
 				clearInterval(this.countdownInterval);
 				this.hide();
@@ -64,7 +126,6 @@ export class RateLimitBanner extends HTMLElement {
 			const minutes = Math.floor(remaining / 60);
 			const seconds = remaining % 60;
 			countdownElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-			remaining--;
 		};
 
 		updateCountdown();
@@ -95,8 +156,8 @@ export class RateLimitBanner extends HTMLElement {
 					right: 0;
 					background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 					color: #ffffff;
-					padding: 32px 20px;
-					min-height: 120px;
+					padding: 50px 20px;
+					min-height: 180px;
 					z-index: 10001;
 					box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 					transform: translateY(-100%);
@@ -173,8 +234,8 @@ export class RateLimitBanner extends HTMLElement {
 
 				@media (max-width: 768px) {
 					.rate-limit-banner {
-						padding: 24px 16px;
-						min-height: 140px;
+						padding: 42px 16px;
+						min-height: 190px;
 						flex-direction: column;
 						align-items: flex-start;
 					}

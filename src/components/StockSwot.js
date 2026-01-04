@@ -544,11 +544,11 @@ export class StockSwot extends HTMLElement {
 			console.error('Error:', error);
 			const errorMessage = error.message || 'Unknown error';
 
-			// Show user-friendly message for overload errors
-			if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
-				alert('The API is currently busy. Please wait a few seconds and try again.\n\nThe free tier has rate limits - please don\'t click the button multiple times.');
+			// Show user-friendly message for all errors
+			if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('503') || errorMessage.includes('400') || errorMessage.includes('Session limit exceeded')) {
+				alert('Too many users are currently using this feature. Please try again later.');
 			} else {
-				alert(`Failed to generate SWOT analysis: ${errorMessage}\n\nPlease check the browser console for more details.`);
+				alert('Too many users are currently using this feature. Please try again later.');
 			}
 		} finally {
 			// Always reset flag and button state

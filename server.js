@@ -480,6 +480,12 @@ async function proxyToPython(req, res) {
 		if (rateLimitType) {
 			res.set('X-RateLimit-Type', rateLimitType);
 		}
+		
+		// Forward session remaining header
+		const sessionRemaining = response.headers.get('X-Session-Remaining');
+		if (sessionRemaining !== null) {
+			res.set('X-Session-Remaining', sessionRemaining);
+		}
 
 		// Get response data
 		const data = await response.text();

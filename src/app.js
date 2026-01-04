@@ -14,6 +14,7 @@ import { PortfolioTracking } from './pages/PortfolioTracking.js';
 import { EconomicCalendar } from './pages/EconomicCalendar.js';
 import { CookieBanner } from './components/CookieBanner.js';
 import { RateLimitBanner } from './components/RateLimitBanner.js';
+import { SessionTimer } from './components/SessionTimer.js';
 import { MobileOrientationWarning } from './components/MobileOrientationWarning.js';
 import { ensureDefaultStorage } from './utils/storage.js';
 import { API_BASE_URL } from './config.js';
@@ -84,6 +85,12 @@ class App {
 			if (!customElements.get('rate-limit-banner')) {
 				customElements.define('rate-limit-banner', RateLimitBanner);
 			}
+			if (!customElements.get('session-timer')) {
+				customElements.define('session-timer', SessionTimer);
+			}
+			if (!customElements.get('mobile-orientation-warning')) {
+				customElements.define('mobile-orientation-warning', MobileOrientationWarning);
+			}
 
 			// Add cookie banner to body
 			if (!document.querySelector('cookie-banner')) {
@@ -97,7 +104,22 @@ class App {
 				}
 			}
 
-			// Add rate limit banner to body
+			// FIRST: Check if cooldown period is active - if so, delete session_end_timestamp immediately
+			const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+			let cooldownActive = false;
+			if (cooldownEndTimestamp) {
+				const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+				const now = Date.now();
+				const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+				if (cooldownRemaining > 0) {
+					cooldownActive = true;
+					console.log('[App] Cooldown period active, cannot start session. Remaining:', cooldownRemaining, 'seconds');
+					// CRITICAL: Delete session_end_timestamp immediately if cooldown is active
+					localStorage.removeItem('session_end_timestamp');
+				}
+			}
+			
+			// Add rate limit banner to body FIRST (so it can restore cooldown before SessionTimer tries to restore session)
 			if (!document.querySelector('rate-limit-banner')) {
 				const rateLimitBanner = document.createElement('rate-limit-banner');
 				document.body.appendChild(rateLimitBanner);
@@ -105,6 +127,69 @@ class App {
 			} else {
 				this.rateLimitBanner = document.querySelector('rate-limit-banner');
 			}
+
+			// Add session timer to body AFTER rate limit banner
+			if (!document.querySelector('session-timer')) {
+				const sessionTimer = document.createElement('session-timer');
+				document.body.appendChild(sessionTimer);
+				this.sessionTimer = sessionTimer;
+			} else {
+				this.sessionTimer = document.querySelector('session-timer');
+			}
+			
+			// Track if session has been started (to show timer on first click)
+			// Only restore session if cooldown is NOT active
+			if (!cooldownActive) {
+				const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+				if (sessionEndTimestamp) {
+					const sessionEnd = parseInt(sessionEndTimestamp, 10);
+					const now = Date.now();
+					const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
+					
+					if (remaining > 0) {
+						// Session still active - timer will be restored by SessionTimer.connectedCallback
+						this.sessionStarted = true;
+						console.log('[App] Session exists in localStorage, will be restored by SessionTimer');
+					} else {
+						// Session expired - remove from localStorage
+						localStorage.removeItem('session_end_timestamp');
+						this.sessionStarted = false;
+					}
+				} else {
+					this.sessionStarted = false;
+				}
+			} else {
+				// Cooldown active - don't allow session start
+				this.sessionStarted = false;
+			}
+			
+			// Add global click listener to start session timer on first user interaction
+			document.addEventListener('click', (e) => {
+				if (!this.sessionStarted && this.sessionTimer) {
+					// Check if cooldown period is active - if so, don't start session
+					const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+					if (cooldownEndTimestamp) {
+						const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+						const now = Date.now();
+						const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+						if (cooldownRemaining > 0) {
+							// Cooldown is still active - don't start session
+							console.log('[Session Timer] Cooldown period active, cannot start session. Remaining:', cooldownRemaining, 'seconds');
+							return;
+						}
+					}
+					
+					// Check again if session exists (might have been restored)
+					const existingSession = localStorage.getItem('session_end_timestamp');
+					if (!existingSession) {
+						console.log('[Session Timer] First click detected, starting session timer');
+						this.sessionStarted = true;
+						this.sessionTimer.show(300); // 5 minutes = 300 seconds
+					} else {
+						this.sessionStarted = true;
+					}
+				}
+			}, { once: false, capture: true });
 
 			// Add mobile orientation warning to body
 			if (!document.querySelector('mobile-orientation-warning')) {
@@ -114,9 +199,6 @@ class App {
 
 			// Setup global fetch interceptor for rate limiting
 			this.setupRateLimitInterceptor();
-
-			// Setup session monitoring to show banner when session expires
-			this.setupSessionMonitoring();
 
 			// Listen for navigation events
 			window.addEventListener('navigate', (e) => {
@@ -670,7 +752,7 @@ class App {
 			try {
 				const response = await originalFetch.apply(this, args);
 
-				// Check for rate limit error (429)
+				// Check for rate limit error (429) - Session expired, show banner
 				if (response.status === 429) {
 					const retryAfter = parseInt(response.headers.get('Retry-After') || '300');
 					const limitType = response.headers.get('X-RateLimit-Type') || 'session_cooldown';
@@ -690,6 +772,54 @@ class App {
 					} catch (e) {
 						console.warn('Session limit exceeded. Please wait before making another request');
 					}
+				} else if (response.ok && response.status >= 200 && response.status < 300) {
+					// Successful API call - DO NOT hide banner if cooldown is active
+					// Banner should only be hidden when cooldown period actually expires (handled by startCountdown)
+					// Check if cooldown is still active before hiding
+					const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
+					let cooldownStillActive = false;
+					if (cooldownEndTimestamp) {
+						const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
+						const now = Date.now();
+						const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
+						// If cooldown is still active, DO NOT hide the banner
+						if (cooldownRemaining > 0) {
+							cooldownStillActive = true;
+						}
+					}
+					// Only hide banner if cooldown is NOT active
+					if (!cooldownStillActive && self.rateLimitBanner) {
+						const banner = self.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
+						if (banner && banner.classList.contains('show')) {
+							// Cooldown expired - hide banner
+							self.rateLimitBanner.hide();
+							self.enableSearchAfterCooldown();
+							localStorage.removeItem('cooldown_end_timestamp');
+						}
+					}
+
+					// Check for session remaining time in header
+					const sessionRemaining = response.headers.get('X-Session-Remaining');
+					if (sessionRemaining !== null) {
+						const remainingSeconds = parseInt(sessionRemaining, 10);
+						console.log('[Session Timer] X-Session-Remaining header:', sessionRemaining, 'seconds:', remainingSeconds);
+						if (!isNaN(remainingSeconds) && remainingSeconds > 0) {
+							// Update session timer with remaining time from backend (sync with backend time)
+							if (self.sessionTimer) {
+								console.log('[Session Timer] Updating timer with', remainingSeconds, 'seconds');
+								self.sessionTimer.show(remainingSeconds);
+							} else {
+								console.warn('[Session Timer] sessionTimer element not found!');
+							}
+						} else {
+							// Session expired - hide timer (banner will be shown by SessionTimer.triggerRateLimitBanner)
+							if (self.sessionTimer) {
+								console.log('[Session Timer] Hiding timer (session expired or no session)');
+								self.sessionTimer.hide();
+							}
+						}
+					}
+					// Note: Don't hide timer if header is missing - it might be shown by click listener
 				}
 
 				return response;
@@ -767,62 +897,6 @@ class App {
 		window.dispatchEvent(new CustomEvent('rate-limit-cooldown', { detail: { active: false } }));
 	}
 
-	setupSessionMonitoring() {
-		// Check session status immediately on start
-		const checkSession = async () => {
-			try {
-				const response = await fetch(`${API_BASE_URL}/api/session-status`, {
-					method: 'GET',
-					headers: { 'Content-Type': 'application/json' }
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP error! status: ${response.status}`);
-				}
-
-				const data = await response.json();
-
-				if (!data.allowed) {
-					// Session expired or in cooldown - show banner
-					if (this.rateLimitBanner) {
-						const banner = this.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
-						if (!banner || !banner.classList.contains('show')) {
-							this.rateLimitBanner.show(data.retry_after, 'session_cooldown', 0, 0, data.session_remaining);
-							this.disableSearchDuringCooldown();
-						}
-					}
-				} else {
-					// Session is active - hide banner if shown (cooldown ended, new session started)
-					if (this.rateLimitBanner) {
-						const banner = this.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
-						if (banner && banner.classList.contains('show')) {
-							this.rateLimitBanner.hide();
-							this.enableSearchAfterCooldown();
-						}
-					}
-				}
-			} catch (error) {
-				// Silently fail - don't spam console with monitoring errors
-				console.debug('Session monitoring check failed:', error.message);
-				// If session status check fails, assume cooldown and show banner
-				if (this.rateLimitBanner) {
-					const banner = this.rateLimitBanner.shadowRoot?.querySelector('.rate-limit-banner');
-					if (!banner || !banner.classList.contains('show')) {
-						this.rateLimitBanner.show(300, 'session_cooldown', 0, 0, 0); // Default to 5 min cooldown
-						this.disableSearchDuringCooldown();
-					}
-				}
-			}
-		};
-
-		// Check immediately on start
-		checkSession();
-
-		// Then check every 10 seconds for more responsive updates
-		// Reduced polling frequency: check every 60 seconds instead of 10 seconds
-		// Session status doesn't change frequently, so we don't need to poll so often
-		this.sessionCheckInterval = setInterval(checkSession, 60000);
-	}
 }
 
 // Start app when DOM is ready

@@ -1950,8 +1950,9 @@ export class MarketOverview extends HTMLElement {
 				}
 				
 				/* Show overlay only on mobile devices in portrait mode */
+				/* Note: JavaScript will control visibility based on dismissal state */
 				@media only screen and (max-width: 900px) and (orientation: portrait) {
-					.mobile-rotate-overlay:not(.hidden) {
+					.mobile-rotate-overlay:not(.hidden):not(.dismissed) {
 						display: flex;
 					}
 				}
@@ -2412,17 +2413,37 @@ export class MarketOverview extends HTMLElement {
 		// Setup touch gestures for mobile
 		this.setupTouchGestures();
 
-		// Load market data AFTER theme is set
-		this.loadMarketData();
-
-		// Top Performers ticker setup
-		this.setupTopPerformersTicker();
+		// Load market data AFTER theme is set (non-blocking)
+		// Defer top performers ticker to load after main content
+		setTimeout(() => {
+			this.loadMarketData();
+		}, 0);
+		
+		// Top Performers ticker setup - defer to not block initial render
+		setTimeout(() => {
+			this.setupTopPerformersTicker();
+		}, 100);
 
 		// Mobile rotate overlay - continue button
+		// Check if already dismissed (same storage key as MobileOrientationWarning)
+		const storageKey = 'mobile-orientation-warning-dismissed';
 		const rotateOverlay = this.shadowRoot.getElementById('mobile-rotate-overlay');
 		const continueBtn = this.shadowRoot.getElementById('rotate-continue-btn');
+		
+		// Check if already dismissed OR if global MobileOrientationWarning is showing
+		// Only show MarketOverview warning if global one doesn't exist or is hidden
+		const globalWarning = document.querySelector('mobile-orientation-warning');
+		const globalWarningOverlay = globalWarning?.shadowRoot?.querySelector('.mobile-warning-overlay');
+		const isGlobalWarningShowing = globalWarningOverlay?.classList.contains('show');
+		
+		if (sessionStorage.getItem(storageKey) === 'true' || isGlobalWarningShowing) {
+			rotateOverlay?.classList.add('hidden', 'dismissed');
+		}
+		
 		continueBtn?.addEventListener('click', () => {
-			rotateOverlay?.classList.add('hidden');
+			rotateOverlay?.classList.add('hidden', 'dismissed');
+			// Save dismissal state so it won't reappear until page reload
+			sessionStorage.setItem(storageKey, 'true');
 		});
 
 		// Disclaimer link
@@ -4708,12 +4729,16 @@ export class MarketOverview extends HTMLElement {
 			this.displayMarketSummary(summary, false);
 		} catch (error) {
 			console.error('[AI Market Summary] Error:', error);
-			let errorMessage = error.message || 'Unknown error';
-			if (errorMessage.includes('overloaded') || errorMessage.includes('quota') || errorMessage.includes('rate limit')) {
-				errorMessage = 'The API is currently busy. Please wait a few seconds and try again.';
+			const errorMessage = error.message || 'Unknown error';
+			// Always show user-friendly message
+			const userFriendlyMessage = 'Too many users are currently using this feature. Please try again later.';
+			content.innerHTML = `<div class="ai-summary-error">${userFriendlyMessage}</div>`;
+			// Re-enable button immediately after error
+			if (aiSummaryBtn) {
+				aiSummaryBtn.disabled = false;
 			}
-			content.innerHTML = `<div class="ai-summary-error">Error loading AI market summary: ${errorMessage}<br><small>Please try again later.</small></div>`;
 		} finally {
+			// Ensure button is always enabled after operation completes
 			if (aiSummaryBtn) {
 				aiSummaryBtn.disabled = false;
 			}

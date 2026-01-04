@@ -3,17 +3,36 @@ export class MobileOrientationWarning extends HTMLElement {
 		super();
 		this.attachShadow({ mode: 'open' });
 		this.dismissed = false;
+		this.storageKey = 'mobile-orientation-warning-dismissed';
+		this.rendered = false;
 	}
 
 	connectedCallback() {
-		this.checkAndShow();
-		// Listen for orientation changes
-		window.addEventListener('orientationchange', () => {
-			setTimeout(() => this.checkAndShow(), 100);
+		console.log('[MobileOrientationWarning] connectedCallback called');
+		
+		// Always render first
+		this.render();
+		this.rendered = true;
+		
+		// Use requestAnimationFrame to ensure DOM is fully ready
+		requestAnimationFrame(() => {
+			console.log('[MobileOrientationWarning] requestAnimationFrame callback');
+			this.checkAndShow();
+			// Also check after a small delay as fallback
+			setTimeout(() => {
+				console.log('[MobileOrientationWarning] setTimeout callback');
+				this.checkAndShow();
+			}, 300);
 		});
-		// Listen for resize events (in case user rotates device)
-		window.addEventListener('resize', () => {
-			setTimeout(() => this.checkAndShow(), 100);
+		
+		// Only listen for orientation changes, not resize events
+		// This prevents the warning from reappearing when the screen moves
+		window.addEventListener('orientationchange', () => {
+			// Only check on orientation change, not on every resize
+			// The warning should only show once per page load if dismissed
+			if (!this.isDismissed()) {
+				setTimeout(() => this.checkAndShow(), 300);
+			}
 		});
 	}
 
@@ -22,41 +41,77 @@ export class MobileOrientationWarning extends HTMLElement {
 			(window.innerWidth <= 768 && window.innerHeight <= 1024);
 	}
 
+	isDismissed() {
+		// Check if user has dismissed the warning in this page load only
+		// Not using sessionStorage - modal should appear on every page reload
+		return this.dismissed === true;
+	}
+
+	setDismissed() {
+		// Mark as dismissed for this page load only (not persisted)
+		this.dismissed = true;
+	}
+
 	checkAndShow() {
+		console.log('[MobileOrientationWarning] checkAndShow called');
+		
+		// Check if user has already dismissed the warning
+		const dismissed = this.isDismissed();
+		console.log('[MobileOrientationWarning] isDismissed:', dismissed);
+		
+		if (dismissed) {
+			// Ensure overlay is hidden if dismissed
+			const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
+			if (overlay) {
+				overlay.classList.remove('show');
+			}
+			console.log('[MobileOrientationWarning] Modal dismissed, hiding');
+			return;
+		}
+
 		// Check if mobile device
-		if (!this.isMobileDevice()) {
+		const isMobile = this.isMobileDevice();
+		console.log('[MobileOrientationWarning] isMobileDevice:', isMobile, 'window.innerWidth:', window.innerWidth, 'window.innerHeight:', window.innerHeight);
+		
+		if (!isMobile) {
 			// Hide warning if not on mobile
 			const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 			if (overlay) {
 				overlay.classList.remove('show');
 			}
+			console.log('[MobileOrientationWarning] Not a mobile device, hiding');
 			return;
 		}
 
-		// Check if overlay already exists and is shown
+		// Get overlay - it should exist after render()
 		let overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
-		if (overlay && overlay.classList.contains('show')) {
-			// Already shown, don't re-render
-			return;
-		}
-
-		// Show warning (render if needed, then show)
+		console.log('[MobileOrientationWarning] Overlay found:', !!overlay);
+		
+		// If overlay doesn't exist, render it
 		if (!overlay) {
+			console.log('[MobileOrientationWarning] Overlay not found, re-rendering');
 			this.render();
+			this.rendered = true;
 			overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 		}
+		
+		// Show warning
 		if (overlay) {
+			console.log('[MobileOrientationWarning] Showing modal');
 			overlay.classList.add('show');
+		} else {
+			console.error('[MobileOrientationWarning] Overlay still not found after render!');
 		}
 	}
 
 	dismiss() {
-		// Only hide the overlay, don't remove it or save to localStorage
-		// This way it will show again next time the page loads on mobile
+		// Hide the overlay and save dismissal state
 		const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 		if (overlay) {
 			overlay.classList.remove('show');
 		}
+		// Save dismissal state so it won't reappear until page reload
+		this.setDismissed();
 	}
 
 	render() {
@@ -121,64 +176,6 @@ export class MobileOrientationWarning extends HTMLElement {
 					position: relative;
 				}
 				
-				/* Portrait mode - fullscreen */
-				@media (orientation: portrait) and (max-width: 1024px) {
-					.warning-content {
-						padding: 60px 40px;
-						max-width: 100vw !important;
-						width: 100vw !important;
-						min-height: 100vh !important;
-						height: 100vh !important;
-						border-radius: 0 !important;
-						display: flex;
-						flex-direction: column;
-						justify-content: center;
-						box-shadow: none !important;
-						border: none !important;
-						margin: 0 !important;
-						position: fixed !important;
-						top: 0 !important;
-						left: 0 !important;
-						right: 0 !important;
-						bottom: 0 !important;
-					}
-					
-					.warning-title {
-						font-size: 3rem;
-						margin-bottom: 40px;
-					}
-					
-					.warning-message {
-						font-size: 1.8rem;
-						line-height: 2;
-						margin-bottom: 50px;
-					}
-					
-					.recommendation {
-						font-size: 1.6rem;
-						margin-top: 50px;
-						padding-top: 50px;
-					}
-					
-					.phone-icon {
-						width: 140px;
-						height: 240px;
-					}
-					
-					.phone-icon-container {
-						height: 220px;
-						margin-bottom: 60px;
-					}
-					
-					.close-button {
-						width: 56px;
-						height: 56px;
-						font-size: 32px;
-						top: 40px;
-						right: 40px;
-					}
-				}
-
 				.close-button {
 					position: absolute;
 					top: 15px;
@@ -269,6 +266,7 @@ export class MobileOrientationWarning extends HTMLElement {
 					}
 				}
 
+				/* Default styles - desktop and landscape */
 				.warning-title {
 					font-size: 1.8rem;
 					font-weight: 700;
@@ -353,7 +351,7 @@ export class MobileOrientationWarning extends HTMLElement {
 
 				@media (max-width: 480px) and (orientation: portrait) {
 					.warning-content {
-						padding: 50px 30px;
+						padding: 25px 20px !important;
 						min-height: 100vh !important;
 						height: 100vh !important;
 						width: 100vw !important;
@@ -366,38 +364,143 @@ export class MobileOrientationWarning extends HTMLElement {
 					}
 
 					.warning-title {
-						font-size: 2.5rem;
-						margin-bottom: 35px;
+						font-size: 1.6rem !important;
+						margin-bottom: 20px !important;
+						line-height: 1.3 !important;
 					}
 
 					.warning-message {
-						font-size: 1.6rem;
-						line-height: 2;
-						margin-bottom: 45px;
+						font-size: 1rem !important;
+						line-height: 1.4 !important;
+						margin-bottom: 20px !important;
 					}
 
 					.recommendation {
-						font-size: 1.4rem;
-						margin-top: 45px;
-						padding-top: 45px;
+						font-size: 0.95rem !important;
+						margin-top: 20px !important;
+						padding-top: 20px !important;
+						line-height: 1.3 !important;
 					}
 
 					.phone-icon {
-						width: 120px;
-						height: 210px;
+						width: 90px !important;
+						height: 160px !important;
 					}
 
 					.phone-icon-container {
-						height: 200px;
-						margin-bottom: 50px;
+						height: 140px !important;
+						margin-bottom: 25px !important;
 					}
 
 					.close-button {
-						width: 52px;
-						height: 52px;
-						font-size: 30px;
-						top: 30px;
-						right: 30px;
+						width: 48px !important;
+						height: 48px !important;
+						font-size: 26px !important;
+						top: 20px !important;
+						right: 20px !important;
+					}
+				}
+
+				/* Extra small phones in portrait */
+				@media (max-width: 360px) and (orientation: portrait) {
+					.warning-content {
+						padding: 40px 25px !important;
+					}
+
+					.warning-title {
+						font-size: 2rem !important;
+						margin-bottom: 28px !important;
+					}
+
+					.warning-message {
+						font-size: 1.25rem !important;
+						line-height: 1.6 !important;
+						margin-bottom: 28px !important;
+					}
+
+					.recommendation {
+						font-size: 1.15rem !important;
+						margin-top: 28px !important;
+						padding-top: 28px !important;
+						line-height: 1.5 !important;
+					}
+
+					.phone-icon {
+						width: 110px !important;
+						height: 200px !important;
+					}
+
+					.phone-icon-container {
+						height: 170px !important;
+						margin-bottom: 35px !important;
+					}
+					
+					.close-button {
+						width: 54px !important;
+						height: 54px !important;
+						font-size: 30px !important;
+						top: 28px !important;
+						right: 28px !important;
+					}
+				}
+
+				/* Portrait mode - fullscreen - MUST BE LAST to override all other styles */
+				@media (orientation: portrait) and (max-width: 1024px) {
+					.warning-content {
+						padding: 50px 35px !important;
+						max-width: 100vw !important;
+						width: 100vw !important;
+						min-height: 100vh !important;
+						height: 100vh !important;
+						border-radius: 0 !important;
+						display: flex !important;
+						flex-direction: column !important;
+						justify-content: center !important;
+						box-shadow: none !important;
+						border: none !important;
+						margin: 0 !important;
+						position: fixed !important;
+						top: 0 !important;
+						left: 0 !important;
+						right: 0 !important;
+						bottom: 0 !important;
+					}
+					
+					.warning-title {
+						font-size: 2.5rem !important;
+						margin-bottom: 35px !important;
+						line-height: 1.3 !important;
+					}
+					
+					.warning-message {
+						font-size: 1.5rem !important;
+						line-height: 1.7 !important;
+						margin-bottom: 35px !important;
+					}
+					
+					.recommendation {
+						font-size: 1.3rem !important;
+						margin-top: 35px !important;
+						padding-top: 35px !important;
+						line-height: 1.6 !important;
+					}
+					
+					.phone-icon {
+						width: 140px !important;
+						height: 240px !important;
+					}
+					
+					.phone-icon-container {
+						height: 200px !important;
+						margin-bottom: 50px !important;
+					}
+					
+					.close-button {
+						width: 60px !important;
+						height: 60px !important;
+						font-size: 36px !important;
+						top: 35px !important;
+						right: 35px !important;
 					}
 				}
 			</style>
