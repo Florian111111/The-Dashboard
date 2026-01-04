@@ -228,29 +228,38 @@ def check_rate_limit(ip: str) -> bool:
     entry['count'] += 1
     return True
 
-def check_session_rate_limit(ip: str) -> dict:
+def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dict:
     """
     Check session-based rate limit:
     - User can use the website for 5 minutes
     - Then must wait 5 minutes before using again
     - During cooldown, no searches/stock analyses are allowed
+    - Session only starts when start_session_if_new=True (i.e., when API is actually used)
     
     Returns: {"allowed": bool, "retry_after": int, "session_remaining": int}
     """
     now = time.time()
     
     if ip not in session_rate_limit_cache:
-        # First time user - start session
-        session_rate_limit_cache[ip] = {
-            'session_start': now,
-            'session_end': now + SESSION_DURATION,
-            'cooldown_end': None
-        }
-        return {
-            "allowed": True,
-            "retry_after": 0,
-            "session_remaining": SESSION_DURATION
-        }
+        # First time user - only start session if API is actually being used
+        if start_session_if_new:
+            session_rate_limit_cache[ip] = {
+                'session_start': now,
+                'session_end': now + SESSION_DURATION,
+                'cooldown_end': None
+            }
+            return {
+                "allowed": True,
+                "retry_after": 0,
+                "session_remaining": SESSION_DURATION
+            }
+        else:
+            # No session started yet - user hasn't made any API requests
+            return {
+                "allowed": True,
+                "retry_after": 0,
+                "session_remaining": 0  # No session active
+            }
     
     entry = session_rate_limit_cache[ip]
     
@@ -397,7 +406,8 @@ async def get_session_status(request: Request = None):
         return {"allowed": True, "retry_after": 0, "session_remaining": 0}
     
     client_ip = get_remote_address(request)
-    rate_limit_result = check_session_rate_limit(client_ip)
+    # Don't start session for status check - only check existing session
+    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=False)
     
     return {
         "allowed": rate_limit_result["allowed"],
@@ -1053,7 +1063,8 @@ def get_fundamentals(symbol: str, request: Request = None):
     # Session-based rate limiting
     if request:
         client_ip = get_remote_address(request)
-        rate_limit_result = check_session_rate_limit(client_ip)
+        # Start session if this is the first API request
+        rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
         if not rate_limit_result["allowed"]:
             raise HTTPException(
                 status_code=429,
@@ -3318,7 +3329,8 @@ async def get_heatmap_quotes(symbols: str, request: Request):
     """
     # Session-based rate limiting
     client_ip = get_remote_address(request)
-    rate_limit_result = check_session_rate_limit(client_ip)
+    # Start session if this is the first API request
+    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
     if not rate_limit_result["allowed"]:
         raise HTTPException(
             status_code=429,
@@ -4024,7 +4036,8 @@ async def get_market_cap(symbols: str, request: Request):
     """
     # Session-based rate limiting
     client_ip = get_remote_address(request)
-    rate_limit_result = check_session_rate_limit(client_ip)
+    # Start session if this is the first API request
+    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
     if not rate_limit_result["allowed"]:
         raise HTTPException(
             status_code=429,

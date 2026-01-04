@@ -1950,8 +1950,9 @@ export class MarketOverview extends HTMLElement {
 				}
 				
 				/* Show overlay only on mobile devices in portrait mode */
+				/* Note: JavaScript will control visibility based on dismissal state */
 				@media only screen and (max-width: 900px) and (orientation: portrait) {
-					.mobile-rotate-overlay:not(.hidden) {
+					.mobile-rotate-overlay:not(.hidden):not(.dismissed) {
 						display: flex;
 					}
 				}
@@ -2419,10 +2420,25 @@ export class MarketOverview extends HTMLElement {
 		this.setupTopPerformersTicker();
 
 		// Mobile rotate overlay - continue button
+		// Check if already dismissed (same storage key as MobileOrientationWarning)
+		const storageKey = 'mobile-orientation-warning-dismissed';
 		const rotateOverlay = this.shadowRoot.getElementById('mobile-rotate-overlay');
 		const continueBtn = this.shadowRoot.getElementById('rotate-continue-btn');
+		
+		// Check if already dismissed OR if global MobileOrientationWarning is showing
+		// Only show MarketOverview warning if global one doesn't exist or is hidden
+		const globalWarning = document.querySelector('mobile-orientation-warning');
+		const globalWarningOverlay = globalWarning?.shadowRoot?.querySelector('.mobile-warning-overlay');
+		const isGlobalWarningShowing = globalWarningOverlay?.classList.contains('show');
+		
+		if (sessionStorage.getItem(storageKey) === 'true' || isGlobalWarningShowing) {
+			rotateOverlay?.classList.add('hidden', 'dismissed');
+		}
+		
 		continueBtn?.addEventListener('click', () => {
-			rotateOverlay?.classList.add('hidden');
+			rotateOverlay?.classList.add('hidden', 'dismissed');
+			// Save dismissal state so it won't reappear until page reload
+			sessionStorage.setItem(storageKey, 'true');
 		});
 
 		// Disclaimer link

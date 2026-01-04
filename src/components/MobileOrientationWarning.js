@@ -3,17 +3,20 @@ export class MobileOrientationWarning extends HTMLElement {
 		super();
 		this.attachShadow({ mode: 'open' });
 		this.dismissed = false;
+		this.storageKey = 'mobile-orientation-warning-dismissed';
+		this.rendered = false;
 	}
 
 	connectedCallback() {
 		this.checkAndShow();
-		// Listen for orientation changes
+		// Only listen for orientation changes, not resize events
+		// This prevents the warning from reappearing when the screen moves
 		window.addEventListener('orientationchange', () => {
-			setTimeout(() => this.checkAndShow(), 100);
-		});
-		// Listen for resize events (in case user rotates device)
-		window.addEventListener('resize', () => {
-			setTimeout(() => this.checkAndShow(), 100);
+			// Only check on orientation change, not on every resize
+			// The warning should only show once per page load if dismissed
+			if (!this.isDismissed()) {
+				setTimeout(() => this.checkAndShow(), 100);
+			}
 		});
 	}
 
@@ -22,7 +25,24 @@ export class MobileOrientationWarning extends HTMLElement {
 			(window.innerWidth <= 768 && window.innerHeight <= 1024);
 	}
 
+	isDismissed() {
+		// Check if user has dismissed the warning in this session
+		// Using sessionStorage so it only persists until page reload
+		return sessionStorage.getItem(this.storageKey) === 'true';
+	}
+
+	setDismissed() {
+		// Mark as dismissed for this session
+		sessionStorage.setItem(this.storageKey, 'true');
+		this.dismissed = true;
+	}
+
 	checkAndShow() {
+		// Check if user has already dismissed the warning
+		if (this.isDismissed()) {
+			return;
+		}
+
 		// Check if mobile device
 		if (!this.isMobileDevice()) {
 			// Hide warning if not on mobile
@@ -33,30 +53,30 @@ export class MobileOrientationWarning extends HTMLElement {
 			return;
 		}
 
-		// Check if overlay already exists and is shown
+		// Check if overlay already exists
 		let overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
-		if (overlay && overlay.classList.contains('show')) {
-			// Already shown, don't re-render
-			return;
-		}
-
-		// Show warning (render if needed, then show)
-		if (!overlay) {
+		
+		// Only render once - if overlay doesn't exist or hasn't been rendered, create it
+		if (!overlay || !this.rendered) {
 			this.render();
+			this.rendered = true;
 			overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 		}
-		if (overlay) {
+		
+		// Show warning if overlay exists and not already shown
+		if (overlay && !overlay.classList.contains('show')) {
 			overlay.classList.add('show');
 		}
 	}
 
 	dismiss() {
-		// Only hide the overlay, don't remove it or save to localStorage
-		// This way it will show again next time the page loads on mobile
+		// Hide the overlay and save dismissal state
 		const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 		if (overlay) {
 			overlay.classList.remove('show');
 		}
+		// Save dismissal state so it won't reappear until page reload
+		this.setDismissed();
 	}
 
 	render() {
@@ -121,64 +141,6 @@ export class MobileOrientationWarning extends HTMLElement {
 					position: relative;
 				}
 				
-				/* Portrait mode - fullscreen */
-				@media (orientation: portrait) and (max-width: 1024px) {
-					.warning-content {
-						padding: 60px 40px;
-						max-width: 100vw !important;
-						width: 100vw !important;
-						min-height: 100vh !important;
-						height: 100vh !important;
-						border-radius: 0 !important;
-						display: flex;
-						flex-direction: column;
-						justify-content: center;
-						box-shadow: none !important;
-						border: none !important;
-						margin: 0 !important;
-						position: fixed !important;
-						top: 0 !important;
-						left: 0 !important;
-						right: 0 !important;
-						bottom: 0 !important;
-					}
-					
-					.warning-title {
-						font-size: 3rem;
-						margin-bottom: 40px;
-					}
-					
-					.warning-message {
-						font-size: 1.8rem;
-						line-height: 2;
-						margin-bottom: 50px;
-					}
-					
-					.recommendation {
-						font-size: 1.6rem;
-						margin-top: 50px;
-						padding-top: 50px;
-					}
-					
-					.phone-icon {
-						width: 140px;
-						height: 240px;
-					}
-					
-					.phone-icon-container {
-						height: 220px;
-						margin-bottom: 60px;
-					}
-					
-					.close-button {
-						width: 56px;
-						height: 56px;
-						font-size: 32px;
-						top: 40px;
-						right: 40px;
-					}
-				}
-
 				.close-button {
 					position: absolute;
 					top: 15px;
@@ -269,6 +231,7 @@ export class MobileOrientationWarning extends HTMLElement {
 					}
 				}
 
+				/* Default styles - desktop and landscape */
 				.warning-title {
 					font-size: 1.8rem;
 					font-weight: 700;
@@ -353,7 +316,7 @@ export class MobileOrientationWarning extends HTMLElement {
 
 				@media (max-width: 480px) and (orientation: portrait) {
 					.warning-content {
-						padding: 50px 30px;
+						padding: 25px 20px !important;
 						min-height: 100vh !important;
 						height: 100vh !important;
 						width: 100vw !important;
@@ -366,38 +329,135 @@ export class MobileOrientationWarning extends HTMLElement {
 					}
 
 					.warning-title {
-						font-size: 2.5rem;
-						margin-bottom: 35px;
+						font-size: 1.6rem !important;
+						margin-bottom: 20px !important;
+						line-height: 1.3 !important;
 					}
 
 					.warning-message {
-						font-size: 1.6rem;
-						line-height: 2;
-						margin-bottom: 45px;
+						font-size: 1rem !important;
+						line-height: 1.4 !important;
+						margin-bottom: 20px !important;
 					}
 
 					.recommendation {
-						font-size: 1.4rem;
-						margin-top: 45px;
-						padding-top: 45px;
+						font-size: 0.95rem !important;
+						margin-top: 20px !important;
+						padding-top: 20px !important;
+						line-height: 1.3 !important;
 					}
 
 					.phone-icon {
-						width: 120px;
-						height: 210px;
+						width: 90px !important;
+						height: 160px !important;
 					}
 
 					.phone-icon-container {
-						height: 200px;
-						margin-bottom: 50px;
+						height: 140px !important;
+						margin-bottom: 25px !important;
 					}
 
 					.close-button {
-						width: 52px;
-						height: 52px;
-						font-size: 30px;
-						top: 30px;
-						right: 30px;
+						width: 48px !important;
+						height: 48px !important;
+						font-size: 26px !important;
+						top: 20px !important;
+						right: 20px !important;
+					}
+				}
+
+				/* Extra small phones in portrait */
+				@media (max-width: 360px) and (orientation: portrait) {
+					.warning-content {
+						padding: 25px 15px !important;
+					}
+
+					.warning-title {
+						font-size: 1.8rem !important;
+						margin-bottom: 20px !important;
+					}
+
+					.warning-message {
+						font-size: 1.1rem !important;
+						line-height: 1.4 !important;
+						margin-bottom: 20px !important;
+					}
+
+					.recommendation {
+						font-size: 1rem !important;
+						margin-top: 20px !important;
+						padding-top: 20px !important;
+						line-height: 1.3 !important;
+					}
+
+					.phone-icon {
+						width: 90px !important;
+						height: 160px !important;
+					}
+
+					.phone-icon-container {
+						height: 140px !important;
+						margin-bottom: 25px !important;
+					}
+				}
+
+				/* Portrait mode - fullscreen - MUST BE LAST to override all other styles */
+				@media (orientation: portrait) and (max-width: 1024px) {
+					.warning-content {
+						padding: 30px 25px !important;
+						max-width: 100vw !important;
+						width: 100vw !important;
+						min-height: 100vh !important;
+						height: 100vh !important;
+						border-radius: 0 !important;
+						display: flex !important;
+						flex-direction: column !important;
+						justify-content: center !important;
+						box-shadow: none !important;
+						border: none !important;
+						margin: 0 !important;
+						position: fixed !important;
+						top: 0 !important;
+						left: 0 !important;
+						right: 0 !important;
+						bottom: 0 !important;
+					}
+					
+					.warning-title {
+						font-size: 1.8rem !important;
+						margin-bottom: 25px !important;
+						line-height: 1.3 !important;
+					}
+					
+					.warning-message {
+						font-size: 1.1rem !important;
+						line-height: 1.5 !important;
+						margin-bottom: 25px !important;
+					}
+					
+					.recommendation {
+						font-size: 1rem !important;
+						margin-top: 25px !important;
+						padding-top: 25px !important;
+						line-height: 1.4 !important;
+					}
+					
+					.phone-icon {
+						width: 100px !important;
+						height: 180px !important;
+					}
+					
+					.phone-icon-container {
+						height: 150px !important;
+						margin-bottom: 30px !important;
+					}
+					
+					.close-button {
+						width: 50px !important;
+						height: 50px !important;
+						font-size: 28px !important;
+						top: 25px !important;
+						right: 25px !important;
 					}
 				}
 			</style>
