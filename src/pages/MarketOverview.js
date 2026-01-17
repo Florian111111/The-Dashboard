@@ -928,12 +928,14 @@ export class MarketOverview extends HTMLElement {
 				/* ========== FEATURES BUTTONS ========== */
 				.features-buttons-container {
 					display: grid;
-					grid-template-columns: repeat(3, auto);
+					grid-template-columns: repeat(3, 1fr);
 					grid-template-rows: repeat(2, 1fr);
 					gap: 8px;
 					height: 100%;
 					align-items: stretch;
-					justify-content: center;
+					width: 100%;
+					max-width: 100%;
+					box-sizing: border-box;
 				}
 				.feature-btn {
 					background: #1f2a37;
@@ -1444,6 +1446,20 @@ export class MarketOverview extends HTMLElement {
 					display: grid;
 					grid-template-columns: 1fr 1fr;
 					gap: 20px;
+				}
+				.two-panel-layout {
+					display: grid;
+					grid-template-columns: 1.25fr 0.75fr;
+					gap: 20px;
+					margin: 30px 0;
+					width: 100%;
+				}
+				.two-panel-layout .right-panel {
+					width: 100%;
+				}
+				.left-panel, .right-panel {
+					display: flex;
+					flex-direction: column;
 				}
 				.column-title {
 					font-size: 1.3rem;
@@ -2016,6 +2032,107 @@ export class MarketOverview extends HTMLElement {
 					text-transform: uppercase;
 					letter-spacing: 0.5px;
 				}
+				.crypto-container {
+					display: flex;
+					flex-direction: column;
+					gap: 12px;
+					max-height: 180px;
+					overflow-y: auto;
+					overflow-x: hidden;
+					padding-right: 4px;
+				}
+				.crypto-container::-webkit-scrollbar {
+					width: 6px;
+				}
+				.crypto-container::-webkit-scrollbar-track {
+					background: #1f2a37;
+					border-radius: 3px;
+				}
+				.crypto-container::-webkit-scrollbar-thumb {
+					background: #4ea1f3;
+					border-radius: 3px;
+				}
+				.crypto-container::-webkit-scrollbar-thumb:hover {
+					background: #5fb3ff;
+				}
+				.crypto-item {
+					background: #0b0f14;
+					border: 1px solid #1f2a37;
+					border-radius: 8px;
+					padding: 14px;
+					transition: all 0.2s ease;
+				}
+				.crypto-item:hover {
+					background: #1a1f2e;
+					border-color: #4ea1f3;
+					transform: translateX(4px);
+				}
+				:host(.light-mode) .crypto-item {
+					background: var(--bg-card);
+					border-color: var(--border-color);
+				}
+				:host(.light-mode) .crypto-item:hover {
+					background: var(--bg-secondary);
+					border-color: var(--accent-blue);
+				}
+				.crypto-header {
+					display: flex;
+					justify-content: space-between;
+					align-items: flex-start;
+					margin-bottom: 8px;
+					gap: 12px;
+				}
+				.crypto-name {
+					font-size: 0.95rem;
+					font-weight: 600;
+					color: #4ea1f3;
+					line-height: 1.4;
+					flex: 1;
+				}
+				:host(.light-mode) .crypto-name {
+					color: var(--accent-blue);
+				}
+				.crypto-symbol {
+					font-size: 0.85rem;
+					font-weight: 700;
+					color: #e6edf3;
+					background: #1f2a37;
+					padding: 2px 8px;
+					border-radius: 4px;
+				}
+				:host(.light-mode) .crypto-symbol {
+					color: var(--text-primary);
+					background: #e0e7ef;
+				}
+				.crypto-details {
+					display: flex;
+					flex-direction: column;
+					gap: 4px;
+					margin-top: 8px;
+				}
+				.crypto-detail-row {
+					display: flex;
+					justify-content: space-between;
+					font-size: 0.8rem;
+					color: #9fb0c0;
+				}
+				:host(.light-mode) .crypto-detail-row {
+					color: var(--text-secondary);
+				}
+				.crypto-price {
+					color: #e6edf3;
+					font-weight: 600;
+					font-size: 0.95rem;
+				}
+				.crypto-change {
+					font-weight: 600;
+				}
+				.crypto-change.positive {
+					color: #10b981;
+				}
+				.crypto-change.negative {
+					color: #ef4444;
+				}
 				.news-filter-dropdown {
 					font-size: 0.85rem;
 					padding: 6px 12px;
@@ -2214,6 +2331,7 @@ export class MarketOverview extends HTMLElement {
 					}
 					
 					.features-buttons-container {
+						grid-template-columns: repeat(3, auto);
 						width: 100%;
 						justify-content: center;
 					}
@@ -2471,27 +2589,21 @@ export class MarketOverview extends HTMLElement {
 				<div class="header-center">
 					<div class="features-buttons-container">
 						<button class="feature-btn" id="menu-watchlist">
-							<span class="features-menu-icon">⭐</span>
 							<span>Watchlist</span>
 						</button>
 						<button class="feature-btn" id="menu-comparison">
-							<span class="features-menu-icon">📊</span>
 							<span>Stock Comparison</span>
 						</button>
 						<button class="feature-btn" id="menu-backtesting">
-							<span class="features-menu-icon">🔬</span>
 							<span>Backtesting Engine</span>
 						</button>
 						<button class="feature-btn" id="menu-backtesting-pro">
-							<span class="features-menu-icon">🚀</span>
 							<span>Backtesting Engine Pro</span>
 						</button>
 						<button class="feature-btn" id="menu-portfolio">
-							<span class="features-menu-icon">📈</span>
 							<span>Portfolio Tracking</span>
 						</button>
 						<button class="feature-btn" id="menu-economic-calendar">
-							<span class="features-menu-icon">📅</span>
 							<span>Economic Calendar</span>
 						</button>
 					</div>
@@ -2501,7 +2613,7 @@ export class MarketOverview extends HTMLElement {
 					   target="_blank" 
 					   rel="noopener noreferrer" 
 					   class="feedback-btn">
-						💬 Give Feedback
+						Give Feedback
 					</a>
 				</div>
 			</div>
@@ -2517,7 +2629,6 @@ export class MarketOverview extends HTMLElement {
 							</div>
 						</div>
 						<button class="ai-summary-btn" id="market-ai-summary-btn">
-							<span class="ai-icon">🤖</span>
 							<span>AI Market Summary</span>
 						</button>
 					</div>
@@ -2526,7 +2637,6 @@ export class MarketOverview extends HTMLElement {
 					</div>
 					<div class="page-title-right">
 						<button class="refresh-btn" id="refresh-btn" title="Refresh market data">
-							<span class="refresh-icon">🔄</span>
 							<span>Refresh</span>
 						</button>
 						<div class="time-range-selector" id="global-time-range">
@@ -2578,23 +2688,33 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 			
-			<!-- Market News Section -->
-			<div class="news-section-fullwidth">
-				<div class="section-group">
-					<div class="column-title">
-						<span>📰 Market News</span>
-						<select class="news-filter-dropdown" id="news-filter-dropdown">
-							<option value="all">All News</option>
-							<option value="stocks">Stocks</option>
-							<option value="crypto">Crypto</option>
-							<option value="earnings">Earnings</option>
-							<option value="mergers">M&A</option>
-							<option value="fed">Fed / Central Banks</option>
-							<option value="economic">Economic Data</option>
-						</select>
+			<!-- Market News and Crypto Overview Section -->
+			<div class="two-panel-layout">
+				<div class="left-panel">
+					<div class="section-group">
+						<div class="column-title">
+							<span>Market News</span>
+							<select class="news-filter-dropdown" id="news-filter-dropdown">
+								<option value="all">All News</option>
+								<option value="stocks">Stocks</option>
+								<option value="crypto">Crypto</option>
+								<option value="earnings">Earnings</option>
+								<option value="mergers">M&A</option>
+								<option value="fed">Fed / Central Banks</option>
+								<option value="economic">Economic Data</option>
+							</select>
+						</div>
+						<div class="news-container" id="market-news-container">
+							<div class="loading">Loading market news <div class="loading-dots"><span></span><span></span><span></span></div></div>
+						</div>
 					</div>
-					<div class="news-container" id="market-news-container">
-						<div class="loading">Loading market news <div class="loading-dots"><span></span><span></span><span></span></div></div>
+				</div>
+				<div class="right-panel">
+					<div class="section-group">
+						<div class="column-title">Crypto Overview</div>
+						<div class="crypto-container" id="crypto-container">
+							<div class="loading">Loading crypto prices <div class="loading-dots"><span></span><span></span><span></span></div></div>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -2713,10 +2833,11 @@ export class MarketOverview extends HTMLElement {
 			this.loadMarketData();
 		}, 0);
 		
-		// Load market news
+		// Load market news and crypto overview
 		setTimeout(() => {
 			this.loadMarketNews();
 			this.setupNewsFilter();
+			this.loadCryptoOverview();
 		}, 200);
 		
 		// Top Performers ticker setup - defer to not block initial render
@@ -2834,6 +2955,86 @@ export class MarketOverview extends HTMLElement {
 			const selectedFilter = e.target.value;
 			this.loadMarketNews(selectedFilter);
 		});
+	}
+
+	async loadCryptoOverview() {
+		const cryptoContainer = this.shadowRoot.getElementById('crypto-container');
+		if (!cryptoContainer) return;
+
+		// Show loading state (don't show placeholder data)
+		cryptoContainer.innerHTML = '<div class="loading">Loading crypto prices <div class="loading-dots"><span></span><span></span><span></span></div></div>';
+
+		try {
+			// Get current time range (default to 1D)
+			const timeRange = this.selectedTimeRange || '1D';
+			console.log(`[Crypto Overview] Fetching crypto prices for time range: ${timeRange}`);
+			const response = await fetch(`${API_BASE_URL}/api/crypto-overview?timeRange=${encodeURIComponent(timeRange)}`);
+			
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`[Crypto Overview] Backend error ${response.status}:`, errorText.substring(0, 200));
+				throw new Error(`Backend returned ${response.status}`);
+			}
+			
+			const contentType = response.headers.get('content-type');
+			if (!contentType || !contentType.includes('application/json')) {
+				const text = await response.text();
+				console.error('[Crypto Overview] Non-JSON response:', text.substring(0, 200));
+				throw new Error('Backend returned non-JSON response');
+			}
+			
+			const data = await response.json();
+			const cryptos = data.cryptos || [];
+			
+			if (cryptos.length === 0) {
+				cryptoContainer.innerHTML = '<div class="loading">Unable to load cryptocurrency prices.</div>';
+				return;
+			}
+
+			// Format crypto items - only show if we have valid data
+			cryptoContainer.innerHTML = cryptos.map(crypto => {
+				const name = crypto.name || 'Unknown';
+				const symbol = crypto.symbol ? crypto.symbol.replace('-USD', '') : 'N/A';
+				const price = crypto.price ? crypto.price.toLocaleString('en-US', { 
+					minimumFractionDigits: 2, 
+					maximumFractionDigits: crypto.price < 1 ? 6 : 2 
+				}) : 'N/A';
+				
+				// Only show change if we have valid change data (not 0 if it's actually 0)
+				const change = crypto.change || 0;
+				const changePercent = crypto.changePercent !== undefined && crypto.changePercent !== null ? crypto.changePercent : null;
+				
+				// Only render change if we have valid data
+				let changeDisplay = '';
+				if (changePercent !== null) {
+					const changeClass = change >= 0 ? 'positive' : 'negative';
+					const changeSign = change >= 0 ? '+' : '';
+					changeDisplay = `<span class="crypto-change ${changeClass}">${changeSign}${changePercent.toFixed(2)}%</span>`;
+				} else {
+					changeDisplay = '<span class="crypto-change" style="opacity: 0.5;">--</span>';
+				}
+				
+				return `
+					<div class="crypto-item">
+						<div class="crypto-header">
+							<div class="crypto-name">${this.escapeHtml(name)}</div>
+							<div class="crypto-symbol">${this.escapeHtml(symbol)}</div>
+						</div>
+						<div class="crypto-details">
+							<div class="crypto-detail-row">
+								<span class="crypto-price">$${price}</span>
+								${changeDisplay}
+							</div>
+						</div>
+					</div>
+				`;
+			}).join('');
+			
+			console.log(`[Crypto Overview] Loaded ${cryptos.length} cryptocurrencies`);
+		} catch (error) {
+			console.error('[Crypto Overview] Error loading cryptos:', error);
+			cryptoContainer.innerHTML = '<div class="loading">Unable to load cryptocurrency prices. Please try again later.</div>';
+		}
 	}
 
 	escapeHtml(text) {
@@ -3210,7 +3411,10 @@ export class MarketOverview extends HTMLElement {
 				this.selectedTimeRange = newRange;
 
 				// Reload data with new time range
-				await this.loadMarketData();
+				await Promise.all([
+					this.loadMarketData(),
+					this.loadCryptoOverview()
+				]);
 			});
 		});
 	}
@@ -3269,11 +3473,12 @@ export class MarketOverview extends HTMLElement {
 				console.warn('[Refresh] Error clearing cache:', error);
 			}
 
-			// Reload market data, top performers, and news
+			// Reload market data, top performers, news, and crypto overview
 			await Promise.all([
 				this.loadMarketData(),
 				this.loadTopPerformers(),
-				this.loadMarketNews() // Will use current filter from dropdown
+				this.loadMarketNews(), // Will use current filter from dropdown
+				this.loadCryptoOverview()
 			]);
 		} catch (error) {
 			console.error('[Refresh] Error refreshing data:', error);

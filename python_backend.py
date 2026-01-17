@@ -1710,6 +1710,130 @@ async def get_market_news(request: Request, filter: str = None):
         print(f"[Python Backend] Error fetching market news: {error_msg}")
         raise HTTPException(status_code=500, detail=f"Error fetching market news: {error_msg}")
 
+@app.get("/api/crypto-overview")
+async def get_crypto_overview(request: Request, timeRange: str = "1D"):
+    """
+    Get cryptocurrency prices from Yahoo Finance.
+    Returns prices for major cryptocurrencies with change based on time range.
+    
+    Query parameters:
+    - timeRange: Time range for price change calculation (1D, 1W, 1M, 3M, YTD, 1Y)
+    """
+    # Rate limiting check
+    client_ip = get_remote_address(request)
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
+    
+    # Map timeRange to Yahoo Finance range parameter
+    range_map = {
+        "1D": ("1d", "1d"),
+        "1W": ("5d", "1d"),
+        "1M": ("1mo", "1d"),
+        "3M": ("3mo", "1d"),
+        "YTD": ("ytd", "1d"),
+        "1Y": ("1y", "1d")
+    }
+    
+    timeRange_upper = timeRange.upper()
+    range_param, interval_param = range_map.get(timeRange_upper, ("1d", "1d"))
+    
+    # Major cryptocurrencies with Yahoo Finance symbols
+    crypto_symbols = [
+        {"symbol": "BTC-USD", "name": "Bitcoin"},
+        {"symbol": "ETH-USD", "name": "Ethereum"},
+        {"symbol": "BNB-USD", "name": "Binance Coin"},
+        {"symbol": "SOL-USD", "name": "Solana"},
+        {"symbol": "ADA-USD", "name": "Cardano"},
+        {"symbol": "XRP-USD", "name": "XRP"},
+        {"symbol": "DOGE-USD", "name": "Dogecoin"},
+        {"symbol": "MATIC-USD", "name": "Polygon"},
+        {"symbol": "DOT-USD", "name": "Polkadot"},
+        {"symbol": "AVAX-USD", "name": "Avalanche"},
+    ]
+    
+    def fetch_crypto_data(crypto):
+        """Helper function to fetch data for a single cryptocurrency"""
+        try:
+            # Use Yahoo Finance Chart API with time range
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{crypto['symbol']}?interval={interval_param}&range={range_param}"
+            
+            response = requests.get(url, timeout=10, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get("chart") and data["chart"].get("result") and len(data["chart"]["result"]) > 0:
+                    result = data["chart"]["result"][0]
+                    meta = result.get("meta", {})
+                    
+                    current_price = meta.get("regularMarketPrice")
+                    
+                    # Calculate change from start of time range using historical data
+                    timestamps = result.get("timestamp", [])
+                    indicators = result.get("indicators", {})
+                    quote_data = indicators.get("quote", [{}])[0] if indicators.get("quote") else {}
+                    closes = quote_data.get("close", [])
+                    
+                    # Get price at start of time range (first close price in the range)
+                    start_price = None
+                    if closes and len(closes) > 0:
+                        # Filter out None values and get first valid close
+                        for close_val in closes:
+                            if close_val is not None and close_val > 0:
+                                start_price = close_val
+                                break
+                    
+                    # Fallback to previousClose if we don't have historical data
+                    if not start_price or start_price <= 0:
+                        start_price = meta.get("previousClose") or meta.get("chartPreviousClose") or meta.get("regularMarketPreviousClose")
+                    
+                    # If still no start_price, skip this crypto
+                    if not current_price or not start_price or start_price <= 0:
+                        print(f"[Python Backend] Skipping {crypto['symbol']}: current_price={current_price}, start_price={start_price}")
+                        return None
+                    
+                    change = current_price - start_price
+                    change_percent = (change / start_price * 100) if start_price > 0 else 0
+                    
+                    print(f"[Python Backend] {crypto['symbol']}: current={current_price}, start={start_price}, change={change_percent:.2f}%")
+                    
+                    return {
+                        "symbol": crypto["symbol"],
+                        "name": crypto["name"],
+                        "price": current_price,
+                        "change": change,
+                        "changePercent": change_percent,
+                        "currency": meta.get("currency", "USD")
+                    }
+            
+            return None
+        except Exception as e:
+            print(f"[Python Backend] Error fetching {crypto['symbol']}: {str(e)}")
+            return None
+    
+    try:
+        # Fetch all cryptocurrencies in parallel for better performance
+        print(f"[Python Backend] Fetching {len(crypto_symbols)} cryptocurrencies in parallel...")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(fetch_crypto_data, crypto_symbols))
+        
+        # Filter out None results
+        crypto_data = [r for r in results if r is not None]
+        
+        print(f"[Python Backend] Fetched {len(crypto_data)} cryptocurrency prices")
+        
+        return {
+            "cryptos": crypto_data,
+            "count": len(crypto_data)
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[Python Backend] Error fetching crypto overview: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Error fetching crypto overview: {error_msg}")
+
 # Cache für Beschreibungen (separat vom Hauptcache)
 description_cache = {}  # {symbol: (timestamp, description)}
 DESCRIPTION_CACHE_TTL = timedelta(hours=24)
@@ -4535,6 +4659,7 @@ if __name__ == "__main__":
     print("   - GET /api/debug/{symbol}")
     print("   - GET /api/news/{symbol}")
     print("   - GET /api/market-news (Google News RSS)")
+    print("   - GET /api/crypto-overview (Major cryptocurrencies)")
     print("   - GET /api/analyst/{symbol}")
     print("   - GET /api/sentiment/{symbol}")
     print("   - GET /api/earnings/{symbol}")
