@@ -1263,29 +1263,29 @@ export class MarketOverview extends HTMLElement {
 				}
 				.loading-dots {
 					display: inline-flex;
-					gap: 4px;
+					gap: 6px;
 					align-items: center;
 				}
 				.loading-dots span {
-					width: 5px;
-					height: 5px;
+					width: 8px;
+					height: 8px;
 					background: #4ea1f3;
 					border-radius: 50%;
-					animation: dotWave 1s ease-in-out infinite;
+					animation: dotWave 1.2s ease-in-out infinite;
 				}
 				.loading-dots span:nth-child(2) {
-					animation-delay: 0.15s;
+					animation-delay: 0.2s;
 				}
 				.loading-dots span:nth-child(3) {
-					animation-delay: 0.3s;
+					animation-delay: 0.4s;
 				}
 				@keyframes dotWave {
 					0%, 100% {
 						transform: translateY(0);
-						opacity: 0.3;
+						opacity: 0.4;
 					}
 					50% {
-						transform: translateY(-5px);
+						transform: translateY(-8px);
 						opacity: 1;
 					}
 				}
@@ -1902,6 +1902,15 @@ export class MarketOverview extends HTMLElement {
 					color: #9fb0c0;
 					text-align: center;
 					padding: 20px;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					gap: 8px;
+					flex-wrap: wrap;
+				}
+				.loading .loading-dots {
+					display: inline-flex;
+					align-items: center;
 				}
 				:host(.light-mode) .loading {
 					color: var(--text-secondary);
@@ -2423,6 +2432,7 @@ export class MarketOverview extends HTMLElement {
 							<div class="overview-info-icon" id="macro-overview-info-icon" data-panel="macro">i</div>
 						</div>
 						<div class="global-overview-panel" id="macro-overview-panel">
+							<div class="loading">Loading data <div class="loading-dots"><span></span><span></span><span></span></div></div>
 						</div>
 					</div>
 					<div class="section-group">
@@ -2439,6 +2449,7 @@ export class MarketOverview extends HTMLElement {
 							<div class="overview-info-icon" id="currencies-overview-info-icon" data-panel="currencies">i</div>
 						</div>
 						<div class="global-overview-panel" id="currencies-overview-panel">
+							<div class="loading">Loading data <div class="loading-dots"><span></span><span></span><span></span></div></div>
 						</div>
 					</div>
 					<div class="section-group">
