@@ -204,6 +204,33 @@ export class MobileOrientationWarning extends HTMLElement {
 					transform: scale(0.95);
 				}
 
+				.dismiss-button {
+					width: 100%;
+					background: linear-gradient(135deg, #4ea1f3 0%, #3b82f6 100%);
+					color: #ffffff;
+					border: none;
+					border-radius: 12px;
+					padding: 18px 32px;
+					font-size: 1.2rem;
+					font-weight: 700;
+					cursor: pointer;
+					margin-top: 35px;
+					box-shadow: 0 4px 16px rgba(78, 161, 243, 0.4);
+					transition: all 0.2s ease;
+					text-align: center;
+				}
+
+				.dismiss-button:hover {
+					background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+					box-shadow: 0 6px 24px rgba(78, 161, 243, 0.5);
+					transform: translateY(-2px);
+				}
+
+				.dismiss-button:active {
+					transform: translateY(0);
+					box-shadow: 0 2px 8px rgba(78, 161, 243, 0.3);
+				}
+
 				.phone-icon-container {
 					margin-bottom: 30px;
 					display: flex;
@@ -347,6 +374,13 @@ export class MobileOrientationWarning extends HTMLElement {
 						top: 20px;
 						right: 20px;
 					}
+					
+					.dismiss-button {
+						padding: 18px 28px;
+						font-size: 1.1rem;
+						margin-top: 30px;
+						min-height: 52px;
+					}
 				}
 
 				@media (max-width: 480px) and (orientation: portrait) {
@@ -399,6 +433,13 @@ export class MobileOrientationWarning extends HTMLElement {
 						top: 20px !important;
 						right: 20px !important;
 					}
+					
+					.dismiss-button {
+						padding: 20px 28px !important;
+						font-size: 1.15rem !important;
+						margin-top: 30px !important;
+						min-height: 56px !important;
+					}
 				}
 
 				/* Extra small phones in portrait */
@@ -441,6 +482,13 @@ export class MobileOrientationWarning extends HTMLElement {
 						font-size: 30px !important;
 						top: 28px !important;
 						right: 28px !important;
+					}
+					
+					.dismiss-button {
+						padding: 22px 30px !important;
+						font-size: 1.3rem !important;
+						margin-top: 40px !important;
+						min-height: 64px !important;
 					}
 				}
 
@@ -502,6 +550,13 @@ export class MobileOrientationWarning extends HTMLElement {
 						top: 35px !important;
 						right: 35px !important;
 					}
+					
+					.dismiss-button {
+						padding: 24px 32px !important;
+						font-size: 1.4rem !important;
+						margin-top: 50px !important;
+						min-height: 60px !important;
+					}
 				}
 			</style>
 			<div class="mobile-warning-overlay">
@@ -517,16 +572,22 @@ export class MobileOrientationWarning extends HTMLElement {
 					<p class="recommendation">
 						💡 Tip: Rotate your device to landscape mode for a better viewing experience.
 					</p>
+					<button class="dismiss-button" id="dismiss-warning">Continue to Website</button>
 				</div>
 			</div>
 		`;
 
 		// Add event listeners
 		const closeButton = this.shadowRoot.getElementById('close-warning');
+		const dismissButton = this.shadowRoot.getElementById('dismiss-warning');
 		const overlay = this.shadowRoot.querySelector('.mobile-warning-overlay');
 		
 		if (closeButton) {
 			closeButton.addEventListener('click', () => this.dismiss());
+		}
+		
+		if (dismissButton) {
+			dismissButton.addEventListener('click', () => this.dismiss());
 		}
 		
 		if (overlay) {
