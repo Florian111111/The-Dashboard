@@ -180,12 +180,22 @@ export class SectorHeatmap extends HTMLElement {
 			if (progressFill) progressFill.style.width = '30%';
 			
 			// Use the optimized S&P 500 heatmap endpoint
-			const response = await fetch('${API_BASE_URL}/api/sp500-heatmap');
+			const response = await fetch(`${API_BASE_URL}/api/sp500-heatmap`);
 			
 			if (progressFill) progressFill.style.width = '70%';
 			
 			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`[S&P 500 Heatmap] Backend error ${response.status}:`, errorText.substring(0, 200));
 				throw new Error(`Backend returned ${response.status}`);
+			}
+			
+			// Check if response is JSON
+			const contentType = response.headers.get('content-type');
+			if (!contentType || !contentType.includes('application/json')) {
+				const text = await response.text();
+				console.error('[S&P 500 Heatmap] Non-JSON response:', text.substring(0, 200));
+				throw new Error('Backend returned non-JSON response');
 			}
 			
 			const quoteData = await response.json();

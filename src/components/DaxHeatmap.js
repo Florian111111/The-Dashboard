@@ -127,10 +127,20 @@ export class DaxHeatmap extends HTMLElement {
 			const startTime = performance.now();
 			
 			// Use the optimized DAX heatmap endpoint that fetches all stocks via Yahoo Finance
-			const response = await fetch('${API_BASE_URL}/api/dax-heatmap');
+			const response = await fetch(`${API_BASE_URL}/api/dax-heatmap`);
 			
 			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`[DAX Heatmap] Backend error ${response.status}:`, errorText.substring(0, 200));
 				throw new Error(`Backend returned ${response.status}`);
+			}
+			
+			// Check if response is JSON
+			const contentType = response.headers.get('content-type');
+			if (!contentType || !contentType.includes('application/json')) {
+				const text = await response.text();
+				console.error('[DAX Heatmap] Non-JSON response:', text.substring(0, 200));
+				throw new Error('Backend returned non-JSON response');
 			}
 			
 			const quoteData = await response.json();
