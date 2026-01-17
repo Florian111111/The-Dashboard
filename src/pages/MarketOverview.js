@@ -2980,11 +2980,11 @@ export class MarketOverview extends HTMLElement {
 			// Remove cache entries that start with 'stock_' for market indices and indicators
 			try {
 				const marketSymbols = [
-					'^GSPC', '^GDAXI', '^N225', '^NDX', '^HSI', // Indices
+					'^GSPC', '^GDAXI', '^N225', '^NDX', '^HSI', '^FTSE', '^FCHI', '^SSMI', '^AXJO', '^GSPTSE', // Indices
 					'^VIX', 'DX-Y.NYB', 'GC=F', 'DGS10', 'T5YIFR', 'BAMLC0A0CM', 
 					'TEDRATE', 'STLFSI4', 'DCOILWTICO', 'DCOILBRENTEU', 'RRPONTSYD', // Macro indicators
 					'EURUSD=X', 'GBPUSD=X', 'JPY=X', // Currencies
-					'SI=F', 'CL=F' // Commodities
+					'SI=F', 'CL=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F' // Commodities
 				];
 
 				if (typeof localStorage !== 'undefined' && localStorage) {
@@ -3626,7 +3626,12 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: '^GDAXI', name: 'DAX', fallback: 'DAX' },
 			{ symbol: '^N225', name: 'Nikkei 225', fallback: null },
 			{ symbol: '^NDX', name: 'NASDAQ 100', fallback: null },
-			{ symbol: '^HSI', name: 'Hang Seng', fallback: 'HSI' }
+			{ symbol: '^HSI', name: 'Hang Seng', fallback: 'HSI' },
+			{ symbol: '^FTSE', name: 'FTSE 100', fallback: null },
+			{ symbol: '^FCHI', name: 'CAC 40', fallback: null },
+			{ symbol: '^SSMI', name: 'SMI', fallback: null },
+			{ symbol: '^AXJO', name: 'ASX 200', fallback: null },
+			{ symbol: '^GSPTSE', name: 'TSX', fallback: null }
 		];
 
 		// Macro Risk Indicators
@@ -3656,7 +3661,11 @@ export class MarketOverview extends HTMLElement {
 		const commodities = [
 			{ symbol: 'GC=F', name: 'Gold', fallback: 'GC' },
 			{ symbol: 'SI=F', name: 'Silver', fallback: 'SI' },
-			{ symbol: 'CL=F', name: 'WTI Crude Oil', fallback: 'CL' }
+			{ symbol: 'CL=F', name: 'WTI Crude Oil', fallback: 'CL' },
+			{ symbol: 'NG=F', name: 'Natural Gas', fallback: 'NG' },
+			{ symbol: 'HG=F', name: 'Copper', fallback: 'HG' },
+			{ symbol: 'PL=F', name: 'Platinum', fallback: 'PL' },
+			{ symbol: 'PA=F', name: 'Palladium', fallback: 'PA' }
 		];
 
 		const indicesGrid = this.shadowRoot.getElementById('indices-grid');
@@ -3974,7 +3983,9 @@ export class MarketOverview extends HTMLElement {
 		}
 
 		console.log('[Global Overview] Rendering with results:', indexResults);
-		const successfulIndices = indexResults.filter(r => r.success);
+		// Only use first 5 indices (up to Hang Seng) for Global Overview panel
+		const overviewIndices = indexResults.slice(0, 5);
+		const successfulIndices = overviewIndices.filter(r => r.success);
 		console.log('[Global Overview] Successful indices:', successfulIndices.length);
 
 		if (successfulIndices.length === 0) {
@@ -3982,7 +3993,7 @@ export class MarketOverview extends HTMLElement {
 			return;
 		}
 
-		// Map indices to flags and regions
+		// Map indices to flags and regions (only first 5 for overview)
 		const indexMap = {
 			'S&P 500': { flag: '🇺🇸', region: 'North America' },
 			'DAX': { flag: '🇩🇪', region: 'Europe' },
@@ -3991,7 +4002,7 @@ export class MarketOverview extends HTMLElement {
 			'Hang Seng': { flag: '🇭🇰', region: 'Asia' }
 		};
 
-		// Calculate summary statistics
+		// Calculate summary statistics (only for first 5 indices)
 		let totalPositive = 0;
 		let totalNegative = 0;
 		let totalNeutral = 0;
