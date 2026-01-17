@@ -1710,8 +1710,50 @@ export class StockAnalysis extends HTMLElement {
 				try {
 					const { getCachedData, setCachedData } = await import('../utils/cache.js');
 					
-					// Check if we have fresh cached overview data
-					const cachedOverview = getCachedData(symbol, 'stock-overview');
+					// Check if we have fresh cached data for stock analysis page (30 minutes)
+					// Wrap in try-catch to handle blocked localStorage
+					let cachedPageData = null;
+					try {
+						cachedPageData = getCachedData(symbol, 'stock-analysis-page');
+					} catch (error) {
+						// localStorage might be blocked (Tracking Prevention)
+						console.log(`[StockAnalysis] Could not access cache for ${symbol} (localStorage might be blocked), loading fresh data`);
+						cachedPageData = null;
+					}
+					
+					if (cachedPageData) {
+						console.log(`[StockAnalysis] Using cached page data for ${symbol} (30 minutes cache)`);
+						// Use the cached data to populate individual caches for components
+						if (cachedPageData.fundamentals) {
+							setCachedData(symbol, 'fundamentals', cachedPageData.fundamentals);
+						}
+						if (cachedPageData.dividends) {
+							setCachedData(symbol, 'dividends', cachedPageData.dividends);
+						}
+						if (cachedPageData.earnings) {
+							setCachedData(symbol, 'earnings', cachedPageData.earnings);
+						}
+						if (cachedPageData.price_changes) {
+							setCachedData(symbol, 'price-changes', cachedPageData.price_changes);
+						}
+						if (cachedPageData.sentiment) {
+							setCachedData(symbol, 'sentiment', cachedPageData.sentiment);
+						}
+						if (cachedPageData.news) {
+							setCachedData(symbol, 'news', cachedPageData.news);
+						}
+						return; // Exit early if cache is used
+					}
+					
+					// Check if we have fresh cached overview data (5 minutes - for fallback)
+					let cachedOverview = null;
+					try {
+						cachedOverview = getCachedData(symbol, 'stock-overview');
+					} catch (error) {
+						// localStorage might be blocked, continue with API call
+						cachedOverview = null;
+					}
+					
 					if (!cachedOverview) {
 						console.log(`[StockAnalysis] Loading aggregated data for ${symbol}...`);
 						
@@ -1720,35 +1762,50 @@ export class StockAnalysis extends HTMLElement {
 						if (overviewResponse.ok) {
 							const overviewData = await overviewResponse.json();
 							
-							// Cache the aggregated data
-							setCachedData(symbol, 'stock-overview', overviewData);
+							// Cache the aggregated data with 30-minute cache for stock analysis page
+							// Wrap in try-catch to handle blocked localStorage
+							try {
+								setCachedData(symbol, 'stock-analysis-page', overviewData);
+								// Also cache with short-term cache for other uses
+								setCachedData(symbol, 'stock-overview', overviewData);
+								
+								// Also cache individual data types for components that might check individual caches
+								if (overviewData.fundamentals) {
+									setCachedData(symbol, 'fundamentals', overviewData.fundamentals);
+								}
+								if (overviewData.dividends) {
+									setCachedData(symbol, 'dividends', overviewData.dividends);
+								}
+								if (overviewData.earnings) {
+									setCachedData(symbol, 'earnings', overviewData.earnings);
+								}
+								if (overviewData.price_changes) {
+									setCachedData(symbol, 'price-changes', overviewData.price_changes);
+								}
+								if (overviewData.sentiment) {
+									setCachedData(symbol, 'sentiment', overviewData.sentiment);
+								}
+								if (overviewData.news) {
+									setCachedData(symbol, 'news', overviewData.news);
+								}
+							} catch (cacheError) {
+								// localStorage might be blocked, but data is still loaded
+								console.log(`[StockAnalysis] Could not cache data for ${symbol} (localStorage might be blocked)`);
+							}
 							
-							// Also cache individual data types for components that might check individual caches
-							if (overviewData.fundamentals) {
-								setCachedData(symbol, 'fundamentals', overviewData.fundamentals);
-							}
-							if (overviewData.dividends) {
-								setCachedData(symbol, 'dividends', overviewData.dividends);
-							}
-							if (overviewData.earnings) {
-								setCachedData(symbol, 'earnings', overviewData.earnings);
-							}
-							if (overviewData.price_changes) {
-								setCachedData(symbol, 'price-changes', overviewData.price_changes);
-							}
-							if (overviewData.sentiment) {
-								setCachedData(symbol, 'sentiment', overviewData.sentiment);
-							}
-							if (overviewData.news) {
-								setCachedData(symbol, 'news', overviewData.news);
-							}
-							
-							console.log(`[StockAnalysis] Cached aggregated data for ${symbol}`);
+							console.log(`[StockAnalysis] Cached aggregated data for ${symbol} (30 minutes for page)`);
 						} else {
 							console.warn(`[StockAnalysis] Failed to load aggregated data: ${overviewResponse.status}`);
 						}
 					} else {
-						console.log(`[StockAnalysis] Using cached aggregated data for ${symbol}`);
+						console.log(`[StockAnalysis] Using cached aggregated data for ${symbol} (5 minutes cache)`);
+						// Also update the 30-minute cache with the same data
+						try {
+							setCachedData(symbol, 'stock-analysis-page', cachedOverview);
+						} catch (cacheError) {
+							// localStorage might be blocked, but data is still loaded
+							console.log(`[StockAnalysis] Could not update cache for ${symbol} (localStorage might be blocked)`);
+						}
 					}
 				} catch (error) {
 					console.warn(`[StockAnalysis] Error loading aggregated data:`, error);
