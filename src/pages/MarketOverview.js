@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config.js';
+import { getCachedData, setCachedData } from '../utils/cache.js';
 
 export class MarketOverview extends HTMLElement {
 	constructor() {
@@ -2828,10 +2829,13 @@ export class MarketOverview extends HTMLElement {
 		this.setupTouchGestures();
 
 		// Load market data AFTER theme is set (non-blocking)
-		// Defer top performers ticker to load after main content
-		setTimeout(() => {
-			this.loadMarketData();
-		}, 0);
+		// Use requestAnimationFrame to ensure DOM is ready before loading data
+		requestAnimationFrame(() => {
+			// Double RAF to ensure shadow DOM is fully rendered
+			requestAnimationFrame(() => {
+				this.loadMarketData();
+			});
+		});
 		
 		// Load market news and crypto overview
 		setTimeout(() => {
@@ -4087,6 +4091,75 @@ export class MarketOverview extends HTMLElement {
 	}
 
 	async loadMarketData() {
+		// First, ensure grid elements exist in the DOM
+		const indicesGrid = this.shadowRoot.getElementById('indices-grid');
+		const macroGrid = this.shadowRoot.getElementById('macro-grid');
+		const currenciesGrid = this.shadowRoot.getElementById('currencies-grid');
+		const commoditiesGrid = this.shadowRoot.getElementById('commodities-grid');
+		
+		// If grid elements don't exist, wait a bit and try again
+		if (!indicesGrid || !macroGrid || !currenciesGrid || !commoditiesGrid) {
+			console.warn('[MarketOverview] Grid elements not found yet, waiting...');
+			// Wait a bit more and retry (DOM might not be ready yet)
+			setTimeout(() => {
+				this.loadMarketData();
+			}, 50);
+			return;
+		}
+		
+		// Check cache first (with error handling for blocked localStorage)
+		let cachedData = null;
+		try {
+			cachedData = getCachedData('global', 'market-overview');
+		} catch (error) {
+			// localStorage might be blocked (Tracking Prevention)
+			console.log('[MarketOverview] Could not access cache (localStorage might be blocked), loading fresh data');
+			cachedData = null;
+		}
+		
+		if (cachedData && cachedData.indexResults && cachedData.macroResults && cachedData.currencyResults && cachedData.commodityResults) {
+			console.log('[MarketOverview] Using cached data');
+			// Use cached data to render
+			const { indexResults, macroResults, currencyResults, commodityResults } = cachedData;
+			
+			// Verify grid elements still exist before rendering
+			if (!indicesGrid || !macroGrid || !currenciesGrid || !commoditiesGrid) {
+				console.warn('[MarketOverview] Grid elements missing, falling back to normal load');
+				// Fall through to normal loading
+			} else {
+				// Hide loading overlay immediately when using cache
+				const loadingOverlay = this.shadowRoot.getElementById('loading-overlay');
+				if (loadingOverlay) {
+					loadingOverlay.classList.add('hidden');
+					setTimeout(() => {
+						if (loadingOverlay) {
+							loadingOverlay.style.display = 'none';
+						}
+					}, 300);
+				}
+				
+				// Clear grids
+				indicesGrid.innerHTML = '';
+				macroGrid.innerHTML = '';
+				currenciesGrid.innerHTML = '';
+				commoditiesGrid.innerHTML = '';
+				
+				// Render from cached data (reuse the rendering logic)
+				try {
+					this.renderFromCacheData(indexResults, macroResults, currencyResults, commodityResults);
+					return; // Exit early if cache is used successfully
+				} catch (error) {
+					console.error('[MarketOverview] Error rendering from cache, falling back to normal load:', error);
+					// Show loading overlay again if we fall back
+					if (loadingOverlay) {
+						loadingOverlay.classList.remove('hidden');
+						loadingOverlay.style.display = 'flex';
+					}
+					// Fall through to normal loading
+				}
+			}
+		}
+		
 		// Major Indices - with fallback symbols
 		const indices = [
 			{ symbol: '^GSPC', name: 'S&P 500', fallback: null },
@@ -4135,10 +4208,8 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: 'PA=F', name: 'Palladium', fallback: 'PA' }
 		];
 
-		const indicesGrid = this.shadowRoot.getElementById('indices-grid');
-		const macroGrid = this.shadowRoot.getElementById('macro-grid');
-		const currenciesGrid = this.shadowRoot.getElementById('currencies-grid');
-		const commoditiesGrid = this.shadowRoot.getElementById('commodities-grid');
+		// Grid elements already declared at the start of the function
+		// No need to redeclare them here
 
 		// Don't clear grids yet - keep old data visible during loading
 		// Grids will be cleared only after new data is ready
@@ -4439,6 +4510,141 @@ export class MarketOverview extends HTMLElement {
 				}
 			}, 200);
 		}
+		
+		// Save to cache after loading (with error handling for blocked localStorage)
+		try {
+			const cacheData = {
+				indexResults,
+				macroResults,
+				currencyResults,
+				commodityResults
+			};
+			setCachedData('global', 'market-overview', cacheData);
+			console.log('[MarketOverview] Data cached for 30 minutes');
+		} catch (error) {
+			// localStorage might be blocked (Tracking Prevention), but data is still loaded
+			if (error.name === 'SecurityError' || error.name === 'QuotaExceededError') {
+				console.log('[MarketOverview] Could not cache data (localStorage might be blocked), but data is loaded');
+			} else {
+				console.warn('[MarketOverview] Failed to cache data:', error);
+			}
+		}
+	}
+	
+	renderFromCacheData(indexResults, macroResults, currencyResults, commodityResults) {
+		// Get grid elements (they should already exist since loadMarketData checks for them)
+		const indicesGrid = this.shadowRoot.getElementById('indices-grid');
+		const macroGrid = this.shadowRoot.getElementById('macro-grid');
+		const currenciesGrid = this.shadowRoot.getElementById('currencies-grid');
+		const commoditiesGrid = this.shadowRoot.getElementById('commodities-grid');
+		
+		if (!indicesGrid || !macroGrid || !currenciesGrid || !commoditiesGrid) {
+			console.error('[MarketOverview] Grid elements not found for cache rendering');
+			return;
+		}
+		
+		// Render global overview panel
+		this.renderGlobalOverview(indexResults);
+		
+		// Define indices array for reference
+		const indices = [
+			{ symbol: '^GSPC', name: 'S&P 500', fallback: null },
+			{ symbol: '^GDAXI', name: 'DAX', fallback: 'DAX' },
+			{ symbol: '^N225', name: 'Nikkei 225', fallback: null },
+			{ symbol: '^NDX', name: 'NASDAQ 100', fallback: null },
+			{ symbol: '^HSI', name: 'Hang Seng', fallback: 'HSI' },
+			{ symbol: '^FTSE', name: 'FTSE 100', fallback: null },
+			{ symbol: '^FCHI', name: 'CAC 40', fallback: null },
+			{ symbol: '^SSMI', name: 'SMI', fallback: null },
+			{ symbol: '^AXJO', name: 'ASX 200', fallback: null },
+			{ symbol: '^GSPTSE', name: 'TSX', fallback: null }
+		];
+		
+		// Render indices
+		indexResults.forEach((result, idx) => {
+			if (result.success) {
+				const index = indices[idx];
+				const card = this.createIndexCard(result.index.name, result.data, result.indication, index.symbol, 'yahoo');
+				indicesGrid.appendChild(card);
+			} else {
+				const card = this.createErrorCard(result.index.name);
+				indicesGrid.appendChild(card);
+			}
+		});
+		
+		// Define macro indicators for reference
+		const macroIndicators = [
+			{ symbol: '^VIX', name: 'VIX', description: 'Volatility Index', source: 'yahoo', fallback: 'VIX' },
+			{ symbol: 'DGS10', name: '10Y Treasury', description: '10-Year Yield', source: 'fred' },
+			{ symbol: 'T5YIFR', name: '5y5y Inflation Expectations', description: '5-Year, 5-Year Forward Inflation Expectation', source: 'fred' },
+			{ symbol: 'BAMLC0A0CM', name: 'US Investment Grade OAS', description: 'Investment Grade Corporate Spread', source: 'fred' },
+			{ symbol: 'TEDRATE', name: 'TED Spread', description: 'Treasury-Eurodollar Spread', source: 'fred' },
+			{ symbol: 'STLFSI4', name: 'St. Louis Fed Financial Stress Index', description: 'Financial Stress Index', source: 'fred' },
+			{ symbol: 'DCOILWTICO', name: 'WTI Crude Oil Price', description: 'West Texas Intermediate', source: 'fred' },
+			{ symbol: 'DCOILBRENTEU', name: 'Brent Crude Oil Price', description: 'Brent Crude Oil', source: 'fred' },
+			{ symbol: 'RRPONTSYD', name: 'ON RRP Usage', description: 'Overnight Reverse Repo', source: 'fred' },
+			{ symbol: 'DX-Y.NYB', name: 'Dollar Index', description: 'USD Strength', source: 'yahoo', fallback: 'DX=F' },
+			{ symbol: 'GC=F', name: 'Gold', description: 'Safe Haven Asset', source: 'yahoo', fallback: 'GC' }
+		];
+		
+		// Render macro overview panel
+		this.renderMacroOverview(macroResults);
+		
+		// Render macro indicators
+		macroResults.forEach((result, idx) => {
+			if (result.success) {
+				const indicator = macroIndicators[idx];
+				const card = this.createMacroCard(result.indicator.name, result.indicator.description, result.data, result.indication, indicator.symbol, indicator.source);
+				macroGrid.appendChild(card);
+			} else {
+				const card = this.createErrorCard(result.indicator.name);
+				macroGrid.appendChild(card);
+			}
+		});
+		
+		// Define currencies and commodities for reference
+		const currencies = [
+			{ symbol: 'EURUSD=X', name: 'USD/EUR', fallback: null },
+			{ symbol: 'GBPUSD=X', name: 'USD/GBP', fallback: null },
+			{ symbol: 'JPY=X', name: 'USD/JPY', fallback: null }
+		];
+		
+		const commodities = [
+			{ symbol: 'GC=F', name: 'Gold', fallback: 'GC' },
+			{ symbol: 'SI=F', name: 'Silver', fallback: 'SI' },
+			{ symbol: 'CL=F', name: 'WTI Crude Oil', fallback: 'CL' },
+			{ symbol: 'NG=F', name: 'Natural Gas', fallback: 'NG' },
+			{ symbol: 'HG=F', name: 'Copper', fallback: 'HG' },
+			{ symbol: 'PL=F', name: 'Platinum', fallback: 'PL' },
+			{ symbol: 'PA=F', name: 'Palladium', fallback: 'PA' }
+		];
+		
+		// Render currencies overview panel
+		this.renderCurrenciesOverview(currencyResults, commodityResults);
+		
+		// Render currencies
+		currencyResults.forEach((result, idx) => {
+			if (result.success) {
+				const currency = currencies[idx];
+				const card = this.createIndexCard(result.currency.name, result.data, result.indication, currency.symbol, 'yahoo');
+				currenciesGrid.appendChild(card);
+			} else {
+				const card = this.createErrorCard(result.currency.name);
+				currenciesGrid.appendChild(card);
+			}
+		});
+		
+		// Render commodities
+		commodityResults.forEach((result, idx) => {
+			if (result.success) {
+				const commodity = commodities[idx];
+				const card = this.createIndexCard(result.commodity.name, result.data, result.indication, commodity.symbol, 'yahoo');
+				commoditiesGrid.appendChild(card);
+			} else {
+				const card = this.createErrorCard(result.commodity.name);
+				commoditiesGrid.appendChild(card);
+			}
+		});
 	}
 
 	renderGlobalOverview(indexResults) {

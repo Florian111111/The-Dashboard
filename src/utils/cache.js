@@ -17,6 +17,8 @@ const CACHE_DURATIONS = {
 	'ai-summary': 4 * 60 * 60 * 1000,     // 4 hours - AI summaries cached for 4 hours
 	'market-summary': 4 * 60 * 60 * 1000, // 4 hours - Market summaries cached for 4 hours
 	'stock-overview': 5 * 60 * 1000,      // 5 minutes - aggregated overview data (matches backend cache)
+	'market-overview': 30 * 60 * 1000,    // 30 minutes - Market overview page data (indices, macro, currencies, commodities)
+	'stock-analysis-page': 30 * 60 * 1000, // 30 minutes - Stock analysis page data
 };
 
 /**
