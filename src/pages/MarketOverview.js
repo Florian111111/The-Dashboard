@@ -1066,13 +1066,26 @@ export class MarketOverview extends HTMLElement {
 				}
 				.search-container {
 					display: flex;
+					flex-direction: column;
 					gap: 0;
-					align-items: center;
+					align-items: flex-start;
 					width: auto;
 					max-width: 100%;
 					box-sizing: border-box;
 					margin: 0;
 					padding: 0;
+				}
+				.search-container-top {
+					display: flex;
+					gap: 0;
+					align-items: center;
+					width: 100%;
+				}
+				.search-wrapper {
+					display: flex;
+					flex-direction: column;
+					gap: 4px;
+					flex: 1;
 				}
 				.search-box {
 					display: flex;
@@ -1137,6 +1150,18 @@ export class MarketOverview extends HTMLElement {
 				.search-input-wrapper {
 					position: relative;
 					flex: 1;
+				}
+				.search-hint {
+					font-size: 0.7rem;
+					color: #6b7280;
+					line-height: 1.3;
+					padding: 0;
+					margin-top: 4px;
+					width: 100%;
+					margin-left: 0;
+				}
+				:host(.light-mode) .search-hint {
+					color: var(--text-secondary);
 				}
 				.autocomplete-dropdown {
 					position: absolute;
@@ -1357,7 +1382,7 @@ export class MarketOverview extends HTMLElement {
 					min-width: 120px;
 					padding: 16px 24px;
 					background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-					box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+					box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3), 0 0 20px rgba(107, 114, 128, 0.2);
 					flex: 0 0 auto;
 					box-sizing: border-box;
 					display: flex;
@@ -1367,13 +1392,25 @@ export class MarketOverview extends HTMLElement {
 					word-wrap: break-word;
 					text-align: center;
 					line-height: 1.3;
+					animation: pulseGlow 2.5s ease-in-out infinite;
+					position: relative;
 				}
-				.stock-analysis-btn:hover, .feedback-btn:hover {
+				@keyframes pulseGlow {
+					0%, 100% {
+						box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3), 0 0 20px rgba(107, 114, 128, 0.2);
+					}
+					50% {
+						box-shadow: 0 4px 20px rgba(107, 114, 128, 0.5), 0 0 40px rgba(107, 114, 128, 0.4), 0 0 60px rgba(107, 114, 128, 0.3);
+					}
+				}
+				.stock-analysis-btn:hover {
 					transform: translateY(-2px);
 					box-shadow: 0 6px 20px rgba(78, 161, 243, 0.4);
 				}
 				.feedback-btn:hover {
-					box-shadow: 0 6px 20px rgba(107, 114, 128, 0.4);
+					transform: translateY(-2px);
+					box-shadow: 0 6px 20px rgba(107, 114, 128, 0.6), 0 0 30px rgba(107, 114, 128, 0.5);
+					animation: none;
 				}
 			.three-column-layout {
 				display: grid;
@@ -2058,15 +2095,24 @@ export class MarketOverview extends HTMLElement {
 						justify-content: center;
 					}
 					
-					.page-title-center {
-						order: 1;
-					}
-					
 					.page-title-left {
-						order: 2;
+						order: 1;
 						justify-content: center;
 						flex-wrap: wrap;
 						gap: 10px;
+					}
+					
+					.page-title-center {
+						order: 2;
+						display: flex;
+						justify-content: center;
+						align-items: center;
+						width: 100%;
+					}
+					
+					.page-title-center h1 {
+						text-align: center;
+						width: 100%;
 					}
 					
 					.page-title-right {
@@ -2263,14 +2309,19 @@ export class MarketOverview extends HTMLElement {
 			<div class="header">
 				<div class="header-left">
 					<div class="search-container" id="search-container">
-						<div class="search-label">Stock<br>Analysis</div>
-						<div class="search-box">
-							<div class="search-input-wrapper">
-								<input type="text" id="stock-search-input" placeholder="Enter stock ticker (e.g., AAPL, MSFT) or search by name" autocomplete="off" />
-								<div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
+						<div class="search-container-top">
+							<div class="search-label">Stock<br>Analysis</div>
+							<div class="search-wrapper">
+								<div class="search-box">
+									<div class="search-input-wrapper">
+										<input type="text" id="stock-search-input" placeholder="Enter stock ticker (e.g., AAPL, MSFT) or search by name" autocomplete="off" />
+										<div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
+									</div>
+									<button id="search-submit-btn">Analyze</button>
+								</div>
 							</div>
-							<button id="search-submit-btn">Analyze</button>
 						</div>
+						<div class="search-hint">Enter ticker (e.g., AAPL) to analyze directly, or search by name and select from suggestions. For stocks with multiple tickers, use the one with complete data available.</div>
 					</div>
 				</div>
 				<div class="header-center">
