@@ -16,6 +16,7 @@ import os
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
+import xml.etree.ElementTree as ET
 
 # Load environment variables from .env file
 load_dotenv()
@@ -1579,6 +1580,135 @@ async def get_stock_news(symbol: str, request: Request):
         error_msg = str(e)
         print(f"[Python Backend] Error fetching news: {error_msg}")
         raise HTTPException(status_code=500, detail=f"Error fetching news: {error_msg}")
+
+@app.get("/api/market-news")
+async def get_market_news(request: Request, filter: str = None):
+    """
+    Get latest market news from Google News RSS feed (finance/business related).
+    Parses RSS XML and returns as JSON.
+    
+    Query parameters:
+    - filter: Optional filter category (all, stocks, crypto, earnings, mergers, fed, economic)
+    """
+    # Rate limiting check
+    client_ip = get_remote_address(request)
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
+    
+    # Define filter mappings to Google News RSS queries
+    filter_queries = {
+        'all': 'stock+market+finance+business',
+        'stocks': 'stock+market+shares+equities+trading',
+        'crypto': 'cryptocurrency+bitcoin+crypto+blockchain',
+        'earnings': 'earnings+quarterly+results+financial+results',
+        'mergers': 'mergers+acquisitions+M&A+takeover',
+        'fed': 'Federal+Reserve+central+bank+interest+rates',
+        'economic': 'economic+data+GDP+inflation+unemployment+employment'
+    }
+    
+    # Get query based on filter (default to 'all')
+    filter_key = filter.lower() if filter else 'all'
+    query = filter_queries.get(filter_key, filter_queries['all'])
+    
+    try:
+        # Google News RSS feed with filter query
+        rss_url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
+        
+        print(f"[Python Backend] Fetching market news from Google News RSS...")
+        response = requests.get(rss_url, timeout=15, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        if response.status_code != 200:
+            raise Exception(f"Google News RSS returned {response.status_code}: {response.text[:200]}")
+        
+        # Parse RSS XML
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError as e:
+            raise Exception(f"Failed to parse RSS XML: {str(e)}")
+        
+        # RSS 2.0 namespace
+        namespaces = {'': 'http://www.w3.org/2005/Atom', 'rss': 'http://purl.org/rss/1.0/'}
+        
+        # Try RSS 2.0 format first
+        items = root.findall('.//item')
+        if not items:
+            # Try Atom format
+            items = root.findall('.//entry', namespaces)
+        
+        news_items = []
+        
+        for item in items[:20]:  # Limit to 20 most recent items
+            try:
+                # RSS 2.0 format
+                title_elem = item.find('title')
+                link_elem = item.find('link')
+                pub_date_elem = item.find('pubDate')
+                description_elem = item.find('description')
+                
+                # Atom format fallback
+                if title_elem is None:
+                    title_elem = item.find('.//{http://www.w3.org/2005/Atom}title', namespaces)
+                if link_elem is None:
+                    link_elem = item.find('.//{http://www.w3.org/2005/Atom}link', namespaces)
+                    if link_elem is not None:
+                        link_elem.text = link_elem.get('href', '')
+                if pub_date_elem is None:
+                    pub_date_elem = item.find('.//{http://www.w3.org/2005/Atom}published', namespaces)
+                if description_elem is None:
+                    description_elem = item.find('.//{http://www.w3.org/2005/Atom}summary', namespaces)
+                
+                title = title_elem.text if title_elem is not None else 'No title'
+                link = link_elem.text if link_elem is not None else (link_elem.get('href') if link_elem is not None else '')
+                pub_date = pub_date_elem.text if pub_date_elem is not None else ''
+                description = description_elem.text if description_elem is not None else ''
+                
+                # Clean HTML tags from description
+                if description:
+                    description = re.sub(r'<[^>]+>', '', description)
+                    description = description.strip()
+                
+                # Parse date
+                datetime_obj = None
+                if pub_date:
+                    try:
+                        # Try parsing RSS date format: "Wed, 15 Jan 2025 12:00:00 GMT"
+                        datetime_obj = datetime.strptime(pub_date.split(',', 1)[1].strip()[:25], '%d %b %Y %H:%M:%S')
+                    except:
+                        try:
+                            # Try ISO format
+                            datetime_obj = datetime.fromisoformat(pub_date.replace('Z', '+00:00'))
+                        except:
+                            pass
+                
+                news_items.append({
+                    'title': title,
+                    'link': link,
+                    'pubDate': pub_date,
+                    'datetime': int(datetime_obj.timestamp() * 1000) if datetime_obj else int(time.time() * 1000),
+                    'description': description,
+                    'source': 'Google News'
+                })
+            except Exception as e:
+                print(f"[Python Backend] Error parsing news item: {str(e)}")
+                continue
+        
+        # Sort by date (newest first)
+        news_items.sort(key=lambda x: x.get('datetime', 0), reverse=True)
+        
+        print(f"[Python Backend] Found {len(news_items)} market news items")
+        
+        return {
+            "news": news_items,
+            "count": len(news_items),
+            "source": "Google News RSS"
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[Python Backend] Error fetching market news: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Error fetching market news: {error_msg}")
 
 # Cache für Beschreibungen (separat vom Hauptcache)
 description_cache = {}  # {symbol: (timestamp, description)}
@@ -4404,6 +4534,7 @@ if __name__ == "__main__":
     print("   - GET /api/pe/{symbol}")
     print("   - GET /api/debug/{symbol}")
     print("   - GET /api/news/{symbol}")
+    print("   - GET /api/market-news (Google News RSS)")
     print("   - GET /api/analyst/{symbol}")
     print("   - GET /api/sentiment/{symbol}")
     print("   - GET /api/earnings/{symbol}")
