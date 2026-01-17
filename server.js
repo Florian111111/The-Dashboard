@@ -439,6 +439,7 @@ const pythonApiPaths = [
 	'/api/hangseng-heatmap',
 	'/api/market-cap',
 	'/api/market-news',
+	'/api/crypto-overview',
 ];
 
 // Create proxy handler for Python backend
