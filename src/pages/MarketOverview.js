@@ -137,6 +137,56 @@ export class MarketOverview extends HTMLElement {
 					line-height: 1;
 				}
 				
+				/* ========== REFRESH BUTTON ========== */
+				.refresh-btn {
+					display: flex;
+					align-items: center;
+					gap: 8px;
+					background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+					color: #ffffff;
+					border: none;
+					padding: 8px 16px;
+					border-radius: 20px;
+					font-size: 0.85rem;
+					font-weight: 600;
+					cursor: pointer;
+					transition: all 0.2s ease;
+					box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+					margin-right: 12px;
+				}
+				.refresh-btn:hover {
+					background: linear-gradient(135deg, #059669 0%, #047857 100%);
+					box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+					transform: translateY(-1px);
+				}
+				.refresh-btn:active {
+					transform: translateY(0);
+				}
+				.refresh-btn:disabled {
+					opacity: 0.6;
+					cursor: not-allowed;
+					transform: none;
+				}
+				.refresh-btn.refreshing .refresh-icon {
+					animation: spin 1s linear infinite;
+				}
+				.refresh-icon {
+					font-size: 1rem;
+					line-height: 1;
+					display: inline-block;
+				}
+				@keyframes spin {
+					from {
+						transform: rotate(0deg);
+					}
+					to {
+						transform: rotate(360deg);
+					}
+				}
+				:host(.light-mode) .refresh-btn {
+					background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+				}
+				
 				/* ========== AI SUMMARY MODAL ========== */
 				.ai-summary-modal-overlay {
 					display: none;
@@ -2021,6 +2071,13 @@ export class MarketOverview extends HTMLElement {
 					
 					.page-title-right {
 						order: 3;
+						flex-wrap: wrap;
+						gap: 10px;
+						justify-content: center;
+					}
+					
+					.refresh-btn {
+						margin-right: 0;
 					}
 					
 					.ai-summary-btn {
@@ -2095,6 +2152,7 @@ export class MarketOverview extends HTMLElement {
 					.feature-btn,
 					.time-range-btn,
 					.ai-summary-btn,
+					.refresh-btn,
 					.search-submit-btn,
 					.autocomplete-item,
 					.performers-tab,
@@ -2126,6 +2184,7 @@ export class MarketOverview extends HTMLElement {
 					.feature-btn:active,
 					.time-range-btn:active,
 					.ai-summary-btn:active,
+					.refresh-btn:active,
 					.autocomplete-item:active,
 					.performers-tab:active {
 						transform: scale(0.95);
@@ -2271,6 +2330,10 @@ export class MarketOverview extends HTMLElement {
 						<h1>Market Overview</h1>
 					</div>
 					<div class="page-title-right">
+						<button class="refresh-btn" id="refresh-btn" title="Refresh market data">
+							<span class="refresh-icon">🔄</span>
+							<span>Refresh</span>
+						</button>
 						<div class="time-range-selector" id="global-time-range">
 							<button class="time-range-btn active" data-range="1D">1D</button>
 							<button class="time-range-btn" data-range="1W">1W</button>
@@ -2401,6 +2464,9 @@ export class MarketOverview extends HTMLElement {
 
 		// Time range selector functionality
 		this.setupTimeRangeSelector();
+
+		// Refresh button functionality
+		this.setupRefreshButton();
 
 		// Search functionality with autocomplete
 		this.setupSearchAutocomplete();
@@ -2824,6 +2890,74 @@ export class MarketOverview extends HTMLElement {
 				await this.loadMarketData();
 			});
 		});
+	}
+
+	setupRefreshButton() {
+		const refreshBtn = this.shadowRoot.getElementById('refresh-btn');
+		if (!refreshBtn) return;
+
+		refreshBtn.addEventListener('click', async () => {
+			await this.refreshMarketData();
+		});
+	}
+
+	async refreshMarketData() {
+		const refreshBtn = this.shadowRoot.getElementById('refresh-btn');
+		if (!refreshBtn) return;
+
+		// Disable button and show spinning animation
+		refreshBtn.disabled = true;
+		refreshBtn.classList.add('refreshing');
+
+		try {
+			// Clear local cache
+			this.cachedData = null;
+			this.topPerformers = [];
+
+			// Clear localStorage cache entries for market data
+			// Remove cache entries that start with 'stock_' for market indices and indicators
+			try {
+				const marketSymbols = [
+					'^GSPC', '^GDAXI', '^N225', '^NDX', '^HSI', // Indices
+					'^VIX', 'DX-Y.NYB', 'GC=F', 'DGS10', 'T5YIFR', 'BAMLC0A0CM', 
+					'TEDRATE', 'STLFSI4', 'DCOILWTICO', 'DCOILBRENTEU', 'RRPONTSYD', // Macro indicators
+					'EURUSD=X', 'GBPUSD=X', 'JPY=X', // Currencies
+					'SI=F', 'CL=F' // Commodities
+				];
+
+				if (typeof localStorage !== 'undefined' && localStorage) {
+					const keysToRemove = [];
+					for (let i = 0; i < localStorage.length; i++) {
+						const key = localStorage.key(i);
+						if (key && key.startsWith('stock_')) {
+							// Check if this cache entry is for a market symbol
+							for (const symbol of marketSymbols) {
+								if (key.includes(symbol.replace(/[^a-zA-Z0-9]/g, ''))) {
+									keysToRemove.push(key);
+									break;
+								}
+							}
+						}
+					}
+					keysToRemove.forEach(key => localStorage.removeItem(key));
+					console.log(`[Refresh] Cleared ${keysToRemove.length} cache entries`);
+				}
+			} catch (error) {
+				console.warn('[Refresh] Error clearing cache:', error);
+			}
+
+			// Reload market data and top performers
+			await Promise.all([
+				this.loadMarketData(),
+				this.loadTopPerformers()
+			]);
+		} catch (error) {
+			console.error('[Refresh] Error refreshing data:', error);
+		} finally {
+			// Re-enable button and remove spinning animation
+			refreshBtn.disabled = false;
+			refreshBtn.classList.remove('refreshing');
+		}
 	}
 
 	setupFeaturesMenu() {
@@ -3476,7 +3610,30 @@ export class MarketOverview extends HTMLElement {
 		const progressBar = this.shadowRoot.getElementById('progress-bar');
 		if (loadingOverlay) {
 			loadingOverlay.classList.remove('hidden');
+			loadingOverlay.style.display = 'flex';
 		}
+
+		// Set maximum display time to 3 seconds
+		const maxDisplayTime = 2000;
+		let overlayHidden = false;
+		const hideOverlayAfterMaxTime = setTimeout(() => {
+			if (loadingOverlay && !overlayHidden) {
+				overlayHidden = true;
+				if (progressBar) {
+					progressBar.style.width = '100%';
+				}
+				setTimeout(() => {
+					if (loadingOverlay) {
+						loadingOverlay.classList.add('hidden');
+						setTimeout(() => {
+							if (loadingOverlay) {
+								loadingOverlay.style.display = 'none';
+							}
+						}, 300);
+					}
+				}, 200);
+			}
+		}, maxDisplayTime);
 
 		// Simulate progress (we'll update this as data loads)
 		let progress = 0;
@@ -3726,20 +3883,24 @@ export class MarketOverview extends HTMLElement {
 			}
 		});
 
-		// Hide loading overlay
-		if (progressBar) {
-			progressBar.style.width = '100%';
-		}
-		setTimeout(() => {
-			if (loadingOverlay) {
-				loadingOverlay.classList.add('hidden');
-				setTimeout(() => {
-					if (loadingOverlay) {
-						loadingOverlay.style.display = 'none';
-					}
-				}, 300);
+		// Hide loading overlay (only if not already hidden by timeout)
+		clearTimeout(hideOverlayAfterMaxTime);
+		if (!overlayHidden) {
+			overlayHidden = true;
+			if (progressBar) {
+				progressBar.style.width = '100%';
 			}
-		}, 200);
+			setTimeout(() => {
+				if (loadingOverlay) {
+					loadingOverlay.classList.add('hidden');
+					setTimeout(() => {
+						if (loadingOverlay) {
+							loadingOverlay.style.display = 'none';
+						}
+					}, 300);
+				}
+			}, 200);
+		}
 	}
 
 	renderGlobalOverview(indexResults) {
