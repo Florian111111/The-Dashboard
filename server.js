@@ -438,6 +438,7 @@ const pythonApiPaths = [
 	'/api/nasdaq100-heatmap',
 	'/api/hangseng-heatmap',
 	'/api/market-cap',
+	'/api/market-news',
 ];
 
 // Create proxy handler for Python backend

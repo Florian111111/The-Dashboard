@@ -1915,6 +1915,141 @@ export class MarketOverview extends HTMLElement {
 				:host(.light-mode) .loading {
 					color: var(--text-secondary);
 				}
+				.news-section-fullwidth {
+					margin: 30px 0;
+					width: 100%;
+				}
+				.news-section {
+					margin: 30px 0;
+					width: 100%;
+				}
+				.news-container {
+					display: flex;
+					flex-direction: column;
+					gap: 12px;
+					max-height: 180px;
+					overflow-y: auto;
+					overflow-x: hidden;
+					padding-right: 4px;
+				}
+				.news-container::-webkit-scrollbar {
+					width: 6px;
+				}
+				.news-container::-webkit-scrollbar-track {
+					background: #1f2a37;
+					border-radius: 3px;
+				}
+				.news-container::-webkit-scrollbar-thumb {
+					background: #4ea1f3;
+					border-radius: 3px;
+				}
+				.news-container::-webkit-scrollbar-thumb:hover {
+					background: #5fb3ff;
+				}
+				.news-item {
+					background: #0b0f14;
+					border: 1px solid #1f2a37;
+					border-radius: 8px;
+					padding: 16px;
+					transition: all 0.2s ease;
+					cursor: pointer;
+				}
+				.news-item:hover {
+					background: #1a1f2e;
+					border-color: #4ea1f3;
+					transform: translateX(4px);
+				}
+				:host(.light-mode) .news-item {
+					background: var(--bg-card);
+					border-color: var(--border-color);
+				}
+				:host(.light-mode) .news-item:hover {
+					background: var(--bg-secondary);
+					border-color: var(--accent-blue);
+				}
+				.news-item-header {
+					display: flex;
+					justify-content: space-between;
+					align-items: flex-start;
+					margin-bottom: 8px;
+					gap: 12px;
+				}
+				.news-item-title {
+					font-size: 1rem;
+					font-weight: 600;
+					color: #4ea1f3;
+					line-height: 1.4;
+					flex: 1;
+				}
+				:host(.light-mode) .news-item-title {
+					color: var(--accent-blue);
+				}
+				.news-item-title:hover {
+					color: #5fb3ff;
+				}
+				.news-item-date {
+					font-size: 0.75rem;
+					color: #6b7280;
+					white-space: nowrap;
+					flex-shrink: 0;
+				}
+				:host(.light-mode) .news-item-date {
+					color: var(--text-secondary);
+				}
+				.news-item-description {
+					font-size: 0.85rem;
+					color: #9fb0c0;
+					line-height: 1.5;
+					margin-top: 8px;
+					display: -webkit-box;
+					-webkit-line-clamp: 2;
+					-webkit-box-orient: vertical;
+					overflow: hidden;
+				}
+				:host(.light-mode) .news-item-description {
+					color: var(--text-secondary);
+				}
+				.news-item-source {
+					font-size: 0.7rem;
+					color: #6b7280;
+					margin-top: 8px;
+					text-transform: uppercase;
+					letter-spacing: 0.5px;
+				}
+				.news-filter-dropdown {
+					font-size: 0.85rem;
+					padding: 6px 12px;
+					padding-right: 32px;
+					background: #1f2a37;
+					border: 1px solid #374151;
+					border-radius: 6px;
+					color: #e6edf3;
+					cursor: pointer;
+					outline: none;
+					appearance: none;
+					background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e6edf3' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+					background-repeat: no-repeat;
+					background-position: right 8px center;
+					transition: all 0.2s ease;
+					margin-left: 12px;
+				}
+				.news-filter-dropdown:hover {
+					background-color: #2a3644;
+					border-color: #4ea1f3;
+				}
+				.news-filter-dropdown:focus {
+					border-color: #4ea1f3;
+					box-shadow: 0 0 0 2px rgba(78, 161, 243, 0.2);
+				}
+				:host(.light-mode) .news-filter-dropdown {
+					background: var(--bg-secondary);
+					border-color: var(--border-color);
+					color: var(--text-primary);
+				}
+				:host(.light-mode) .news-filter-dropdown:hover {
+					background: #e0e7ef;
+					border-color: var(--accent-blue);
+				}
 				.loading-overlay {
 					position: fixed;
 					top: 0;
@@ -2418,12 +2553,6 @@ export class MarketOverview extends HTMLElement {
 							</div>
 						</div>
 					</div>
-					<div class="section-group">
-						<div class="column-title">Major Indices</div>
-						<div class="market-grid" id="indices-grid">
-							<div class="loading">Loading indices...</div>
-						</div>
-					</div>
 				</div>
 				<div class="middle-column">
 					<div class="section-group">
@@ -2433,12 +2562,6 @@ export class MarketOverview extends HTMLElement {
 						</div>
 						<div class="global-overview-panel" id="macro-overview-panel">
 							<div class="loading">Loading data <div class="loading-dots"><span></span><span></span><span></span></div></div>
-						</div>
-					</div>
-					<div class="section-group">
-						<div class="column-title">Macroeconomic Risk Indicators</div>
-						<div class="market-grid" id="macro-grid">
-							<div class="loading">Loading macro indicators...</div>
 						</div>
 					</div>
 				</div>
@@ -2452,6 +2575,48 @@ export class MarketOverview extends HTMLElement {
 							<div class="loading">Loading data <div class="loading-dots"><span></span><span></span><span></span></div></div>
 						</div>
 					</div>
+				</div>
+			</div>
+			
+			<!-- Market News Section -->
+			<div class="news-section-fullwidth">
+				<div class="section-group">
+					<div class="column-title">
+						<span>📰 Market News</span>
+						<select class="news-filter-dropdown" id="news-filter-dropdown">
+							<option value="all">All News</option>
+							<option value="stocks">Stocks</option>
+							<option value="crypto">Crypto</option>
+							<option value="earnings">Earnings</option>
+							<option value="mergers">M&A</option>
+							<option value="fed">Fed / Central Banks</option>
+							<option value="economic">Economic Data</option>
+						</select>
+					</div>
+					<div class="news-container" id="market-news-container">
+						<div class="loading">Loading market news <div class="loading-dots"><span></span><span></span><span></span></div></div>
+					</div>
+				</div>
+			</div>
+			
+			<div class="three-column-layout">
+				<div class="left-column">
+					<div class="section-group">
+						<div class="column-title">Major Indices</div>
+						<div class="market-grid" id="indices-grid">
+							<div class="loading">Loading indices...</div>
+						</div>
+					</div>
+				</div>
+				<div class="middle-column">
+					<div class="section-group">
+						<div class="column-title">Macroeconomic Risk Indicators</div>
+						<div class="market-grid" id="macro-grid">
+							<div class="loading">Loading macro indicators...</div>
+						</div>
+					</div>
+				</div>
+				<div class="right-column">
 					<div class="section-group">
 						<div class="column-title">Currencies</div>
 						<div class="market-grid" id="currencies-grid">
@@ -2466,6 +2631,7 @@ export class MarketOverview extends HTMLElement {
 					</div>
 				</div>
 			</div>
+			
 			<div class="loading-overlay" id="loading-overlay">
 				<div class="loading-content">
 					<div class="loading-text">Loading data</div>
@@ -2547,6 +2713,12 @@ export class MarketOverview extends HTMLElement {
 			this.loadMarketData();
 		}, 0);
 		
+		// Load market news
+		setTimeout(() => {
+			this.loadMarketNews();
+			this.setupNewsFilter();
+		}, 200);
+		
 		// Top Performers ticker setup - defer to not block initial render
 		setTimeout(() => {
 			this.setupTopPerformersTicker();
@@ -2580,6 +2752,95 @@ export class MarketOverview extends HTMLElement {
 			e.preventDefault();
 			window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'disclaimer' } }));
 		});
+	}
+
+	async loadMarketNews(filter = null) {
+		// If no filter provided, get current filter from dropdown
+		if (filter === null) {
+			const filterDropdown = this.shadowRoot.getElementById('news-filter-dropdown');
+			filter = filterDropdown ? filterDropdown.value : 'all';
+		}
+		const newsContainer = this.shadowRoot.getElementById('market-news-container');
+		if (!newsContainer) return;
+
+		try {
+			console.log(`[Market News] Fetching market news with filter: ${filter}`);
+			const url = `${API_BASE_URL}/api/market-news${filter && filter !== 'all' ? `?filter=${encodeURIComponent(filter)}` : ''}`;
+			const response = await fetch(url);
+			
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error(`[Market News] Backend error ${response.status}:`, errorText.substring(0, 200));
+				throw new Error(`Backend returned ${response.status}`);
+			}
+			
+			const contentType = response.headers.get('content-type');
+			if (!contentType || !contentType.includes('application/json')) {
+				const text = await response.text();
+				console.error('[Market News] Non-JSON response:', text.substring(0, 200));
+				throw new Error('Backend returned non-JSON response');
+			}
+			
+			const data = await response.json();
+			const newsItems = data.news || [];
+			
+			if (newsItems.length === 0) {
+				newsContainer.innerHTML = '<div class="loading">No market news available at the moment.</div>';
+				return;
+			}
+
+			// Format news items
+			newsContainer.innerHTML = newsItems.map(item => {
+				// Use datetime (timestamp in ms) or pubDate
+				const dateStr = item.datetime ? new Date(item.datetime).toLocaleDateString('en-US', {
+					month: 'short',
+					day: 'numeric',
+					hour: '2-digit',
+					minute: '2-digit'
+				}) : (item.pubDate ? new Date(item.pubDate).toLocaleDateString('en-US', {
+					month: 'short',
+					day: 'numeric',
+					hour: '2-digit',
+					minute: '2-digit'
+				}) : '');
+				
+				const description = item.description || '';
+				const link = item.link || '#';
+				
+				return `
+					<div class="news-item" onclick="window.open('${link}', '_blank', 'noopener,noreferrer')">
+						<div class="news-item-header">
+							<div class="news-item-title">${this.escapeHtml(item.title)}</div>
+							<div class="news-item-date">${dateStr}</div>
+						</div>
+						${description ? `<div class="news-item-description">${this.escapeHtml(description)}</div>` : ''}
+						<div class="news-item-source">${item.source || 'Google News'}</div>
+					</div>
+				`;
+			}).join('');
+			
+			console.log(`[Market News] Loaded ${newsItems.length} news items`);
+		} catch (error) {
+			console.error('[Market News] Error loading news:', error);
+			newsContainer.innerHTML = '<div class="loading">Unable to load market news. Please try again later.</div>';
+		}
+	}
+
+	setupNewsFilter() {
+		const filterDropdown = this.shadowRoot.getElementById('news-filter-dropdown');
+		if (!filterDropdown) return;
+
+		filterDropdown.addEventListener('change', (e) => {
+			const selectedFilter = e.target.value;
+			this.loadMarketNews(selectedFilter);
+		});
+	}
+
+	escapeHtml(text) {
+		if (!text) return '';
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
 	}
 
 	async setupTopPerformersTicker() {
@@ -3008,10 +3269,11 @@ export class MarketOverview extends HTMLElement {
 				console.warn('[Refresh] Error clearing cache:', error);
 			}
 
-			// Reload market data and top performers
+			// Reload market data, top performers, and news
 			await Promise.all([
 				this.loadMarketData(),
-				this.loadTopPerformers()
+				this.loadTopPerformers(),
+				this.loadMarketNews() // Will use current filter from dropdown
 			]);
 		} catch (error) {
 			console.error('[Refresh] Error refreshing data:', error);
