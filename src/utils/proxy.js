@@ -29,6 +29,8 @@ export async function fetchWithProxy(url, options = {}) {
 			} else if (url.includes('/quote')) {
 				const symbols = params.get('symbols') || symbol;
 				apiUrl = `${backendUrl}/api/yahoo/quote?symbols=${symbols}`;
+			} else if (url.includes('/screener/')) {
+				apiUrl = `${backendUrl}/api/yahoo/screener?${params.toString()}`;
 			} else {
 				throw new Error('Unknown Yahoo Finance endpoint');
 			}
