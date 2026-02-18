@@ -258,6 +258,29 @@ app.get('/api/yahoo/chart/:symbol', async (req, res) => {
 	}
 });
 
+// Proxy endpoint for Yahoo Finance Screener API (top movers: day_gainers, day_losers, most_actives)
+app.get('/api/yahoo/screener', async (req, res) => {
+	try {
+		const scrIds = req.query.scrIds || 'day_gainers';
+		const count = Math.min(parseInt(req.query.count, 10) || 25, 50);
+		const allowedIds = ['day_gainers', 'day_losers', 'most_actives', 'undervalued_growth_stocks', 'growth_technology_stocks'];
+		const validId = allowedIds.includes(scrIds) ? scrIds : 'day_gainers';
+
+		const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${validId}&count=${count}`;
+		const response = await fetch(url, {
+			headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }
+		});
+		if (!response.ok) {
+			throw new Error(`Yahoo screener returned ${response.status}`);
+		}
+		const data = await response.json();
+		res.json(data);
+	} catch (error) {
+		console.error('Yahoo screener error:', error);
+		res.status(500).json({ error: error.message });
+	}
+});
+
 // Proxy endpoint for Yahoo Finance Quote Summary API
 // Note: This endpoint is deprecated - use Chart API metadata instead (more reliable)
 // Kept for backwards compatibility, but will likely fail due to authentication
