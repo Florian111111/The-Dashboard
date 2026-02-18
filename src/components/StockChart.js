@@ -1166,7 +1166,7 @@ export class StockChart extends HTMLElement {
 		if (!this.symbol) return;
 
 		try {
-			const quoteUrl = `http://localhost:3000/api/yahoo/quote?symbol=${this.symbol}`;
+			const quoteUrl = `${API_BASE_URL}/api/yahoo/quote?symbol=${this.symbol}`;
 
 			let data;
 			try {

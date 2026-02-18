@@ -1,35 +1,39 @@
 /**
- * Proxy utility - uses local Express backend if available, otherwise falls back to public proxies
+ * Proxy utility - uses same-origin backend (Node.js in production), falls back to public proxies
  */
-const BACKEND_URL = 'http://localhost:3000';
+function getBackendUrl() {
+	if (typeof window !== 'undefined') {
+		return window.location.origin; // Same origin - works in both dev and production
+	}
+	return 'http://localhost:3000';
+}
 
 export async function fetchWithProxy(url, options = {}) {
-	// Try local backend first (if running)
+	// Try backend first (Node.js proxies Yahoo - works when app served from Node or same origin)
 	if (url.includes('query1.finance.yahoo.com')) {
 		try {
-			// Extract symbol and params from Yahoo Finance URL
+			const backendUrl = getBackendUrl();
 			const urlObj = new URL(url);
 			const pathParts = urlObj.pathname.split('/');
 			const symbol = pathParts[pathParts.length - 1];
 			const params = new URLSearchParams(urlObj.search);
 
 			// Determine endpoint based on URL structure
-			let backendUrl;
+			let apiUrl;
 			if (url.includes('/quoteSummary/')) {
-				backendUrl = `${BACKEND_URL}/api/yahoo/quoteSummary/${symbol}?${params.toString()}`;
+				apiUrl = `${backendUrl}/api/yahoo/quoteSummary/${symbol}?${params.toString()}`;
 			} else if (url.includes('/chart/')) {
-				backendUrl = `${BACKEND_URL}/api/yahoo/chart/${symbol}?${params.toString()}`;
+				apiUrl = `${backendUrl}/api/yahoo/chart/${symbol}?${params.toString()}`;
 			} else if (url.includes('/options/')) {
-				backendUrl = `${BACKEND_URL}/api/yahoo/options/${symbol}?${params.toString()}`;
+				apiUrl = `${backendUrl}/api/yahoo/options/${symbol}?${params.toString()}`;
 			} else if (url.includes('/quote')) {
-				// Quote API - extract symbols from query params
 				const symbols = params.get('symbols') || symbol;
-				backendUrl = `${BACKEND_URL}/api/yahoo/quote?symbols=${symbols}`;
+				apiUrl = `${backendUrl}/api/yahoo/quote?symbols=${symbols}`;
 			} else {
 				throw new Error('Unknown Yahoo Finance endpoint');
 			}
 
-			const response = await fetch(backendUrl);
+			const response = await fetch(apiUrl);
 			if (response.ok) {
 				return await response.json();
 			}
