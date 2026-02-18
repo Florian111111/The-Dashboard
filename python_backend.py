@@ -58,8 +58,8 @@ def check_environment_variables():
     
     # Rate Limiting
     rate_limit_vars = {
-        "SESSION_DURATION": os.getenv("SESSION_DURATION", "300"),
-        "COOLDOWN_DURATION": os.getenv("COOLDOWN_DURATION", "300"),
+        "SESSION_DURATION": os.getenv("SESSION_DURATION", "900"),
+        "COOLDOWN_DURATION": os.getenv("COOLDOWN_DURATION", "900"),
         "RATE_LIMIT_REQUESTS": os.getenv("RATE_LIMIT_REQUESTS", "100"),
         "RATE_LIMIT_WINDOW": os.getenv("RATE_LIMIT_WINDOW", "60"),
     }
@@ -204,10 +204,10 @@ rate_limit_cache = {}
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))  # Max requests per window
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # Time window in seconds
 
-# Session-based rate limiting: 5 minutes usage, then 5 minutes cooldown
+# Session-based rate limiting: 15 minutes usage, then 15 minutes cooldown
 session_rate_limit_cache = {}
-SESSION_DURATION = int(os.getenv("SESSION_DURATION", "300"))  # 5 minutes usage
-COOLDOWN_DURATION = int(os.getenv("COOLDOWN_DURATION", "300"))  # 5 minutes cooldown
+SESSION_DURATION = int(os.getenv("SESSION_DURATION", "900"))  # 15 minutes usage
+COOLDOWN_DURATION = int(os.getenv("COOLDOWN_DURATION", "900"))  # 15 minutes cooldown
 
 def check_rate_limit(ip: str) -> bool:
     """Check if IP has exceeded rate limit"""
@@ -232,9 +232,9 @@ def check_rate_limit(ip: str) -> bool:
 def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dict:
     """
     Check session-based rate limit:
-    - User can use the website for 5 minutes (timer starts on first API request)
+    - User can use the website for 15 minutes (timer starts on first user click / session-start)
     - Timer continues running even if more API requests are made (does NOT reset)
-    - Then must wait 5 minutes before using again (cooldown)
+    - Then must wait 15 minutes before using again (cooldown)
     - During cooldown, no searches/stock analyses are allowed
     - After cooldown: Session only starts when start_session_if_new=True (i.e., when API is actually used)
     - If no action is taken after cooldown, no session starts (session_remaining=0)
@@ -257,11 +257,11 @@ def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dic
                 "session_remaining": SESSION_DURATION
             }
         else:
-            # No session started yet - user hasn't made any API requests
+            # No session - user must call /api/session-start first (on first click)
             return {
-                "allowed": True,
+                "allowed": False,
                 "retry_after": 0,
-                "session_remaining": 0  # No session active
+                "session_remaining": 0  # No session - click to start
             }
     
     entry = session_rate_limit_cache[ip]
@@ -290,13 +290,12 @@ def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dic
                 "session_remaining": session_remaining
             }
         else:
-            # Cooldown ended but no API request - no session active
-            # Remove entry from cache so next API request (with start_session_if_new=True) will start fresh
+            # Cooldown ended but no session started yet - user must click to start
             del session_rate_limit_cache[ip]
             return {
-                "allowed": True,
+                "allowed": False,
                 "retry_after": 0,
-                "session_remaining": 0  # No session active - waiting for user action
+                "session_remaining": 0  # No session - click to start
             }
     
     # Check if session has expired
@@ -447,6 +446,7 @@ async def get_session_status(request: Request = None):
     """
     Get the current session status for the requesting IP.
     This endpoint does NOT count towards rate limiting - it's just for status checking.
+    Does NOT start a session.
     Returns: {"allowed": bool, "retry_after": int, "session_remaining": int}
     """
     if not request:
@@ -460,6 +460,23 @@ async def get_session_status(request: Request = None):
         "allowed": rate_limit_result["allowed"],
         "retry_after": rate_limit_result["retry_after"],
         "session_remaining": rate_limit_result["session_remaining"]
+    }
+
+
+@app.post("/api/session-start")
+@app.get("/api/session-start")
+async def start_session(request: Request):
+    """
+    Explicitly start a session. Called by frontend on first user click.
+    Session only starts when user interacts - not on automatic page load.
+    Returns: {"allowed": bool, "session_remaining": int}
+    """
+    client_ip = get_remote_address(request)
+    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
+    return {
+        "allowed": rate_limit_result["allowed"],
+        "session_remaining": rate_limit_result["session_remaining"],
+        "retry_after": rate_limit_result["retry_after"]
     }
 
 
@@ -1105,13 +1122,14 @@ async def get_historical_fundamentals(symbol: str, request: Request):
 def get_fundamentals(symbol: str, request: Request = None):
     """
     Get comprehensive fundamental data for a stock using Finnhub API.
-    Protected by session-based rate limiting: 5 minutes usage, then 5 minutes cooldown.
+    Protected by session-based rate limiting: 15 minutes usage, then 15 minutes cooldown.
+    Session must be started via /api/session-start (on first user click).
     """
-    # Session-based rate limiting
+    # Session-based rate limiting (session starts via /api/session-start on first user click)
     if request:
         client_ip = get_remote_address(request)
-        # Start session if this is the first API request
-        rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
+        # Only check - session is started explicitly by session-start endpoint
+        rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=False)
         if not rate_limit_result["allowed"]:
             raise HTTPException(
                 status_code=429,
@@ -3625,12 +3643,12 @@ async def get_heatmap_quotes(symbols: str, request: Request):
     Get all data needed for heatmap (price, market cap, change) from Finnhub
     symbols: comma-separated list of symbols (e.g., "AAPL,MSFT,NVDA")
     Returns: list of quote objects with all needed data
-    Protected by session-based rate limiting: 5 minutes usage, then 5 minutes cooldown.
+    Protected by session-based rate limiting: 15 minutes usage, then 15 minutes cooldown.
+    Session must be started via /api/session-start (on first user click).
     """
-    # Session-based rate limiting
+    # Session-based rate limiting (session starts via /api/session-start on first user click)
     client_ip = get_remote_address(request)
-    # Start session if this is the first API request
-    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
+    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=False)
     if not rate_limit_result["allowed"]:
         raise HTTPException(
             status_code=429,
@@ -4332,12 +4350,12 @@ async def get_market_cap(symbols: str, request: Request):
     Get market cap for multiple symbols from Finnhub
     symbols: comma-separated list of symbols (e.g., "AAPL,MSFT,NVDA")
     Returns: dict with symbol -> marketCap mapping
-    Protected by session-based rate limiting: 5 minutes usage, then 5 minutes cooldown.
+    Protected by session-based rate limiting: 15 minutes usage, then 15 minutes cooldown.
+    Session must be started via /api/session-start (on first user click).
     """
-    # Session-based rate limiting
+    # Session-based rate limiting (session starts via /api/session-start on first user click)
     client_ip = get_remote_address(request)
-    # Start session if this is the first API request
-    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=True)
+    rate_limit_result = check_session_rate_limit(client_ip, start_session_if_new=False)
     if not rate_limit_result["allowed"]:
         raise HTTPException(
             status_code=429,

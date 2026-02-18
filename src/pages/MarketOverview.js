@@ -4107,10 +4107,11 @@ export class MarketOverview extends HTMLElement {
 			return;
 		}
 		
-		// Check cache first (with error handling for blocked localStorage)
+		// Check cache first - include time range in key so changing range fetches fresh data
+		const cacheDataType = `market-overview-${this.selectedTimeRange || '1D'}`;
 		let cachedData = null;
 		try {
-			cachedData = getCachedData('global', 'market-overview');
+			cachedData = getCachedData('global', cacheDataType);
 		} catch (error) {
 			// localStorage might be blocked (Tracking Prevention)
 			console.log('[MarketOverview] Could not access cache (localStorage might be blocked), loading fresh data');
@@ -4519,8 +4520,8 @@ export class MarketOverview extends HTMLElement {
 				currencyResults,
 				commodityResults
 			};
-			setCachedData('global', 'market-overview', cacheData);
-			console.log('[MarketOverview] Data cached for 30 minutes');
+			setCachedData('global', cacheDataType, cacheData);
+			console.log('[MarketOverview] Data cached for 30 minutes (time range: ' + (this.selectedTimeRange || '1D') + ')');
 		} catch (error) {
 			// localStorage might be blocked (Tracking Prevention), but data is still loaded
 			if (error.name === 'SecurityError' || error.name === 'QuotaExceededError') {

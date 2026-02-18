@@ -141,7 +141,7 @@ export class RateLimitBanner extends HTMLElement {
 
 	getLimitExplanation() {
 		if (this.limitType === 'session_cooldown') {
-			return `Your 5-minute usage session has ended. The free version limits usage to allow many users to access the platform simultaneously. Please wait 5 minutes before you can search for stocks or load stock analyses again.`;
+			return `Your 15-minute usage session has ended. The free version limits usage to allow many users to access the platform simultaneously. Please wait 15 minutes before you can search for stocks or load stock analyses again.`;
 		}
 		return `Your session has ended. The free version limits usage to allow many users to access the platform simultaneously. Please wait before using the platform again.`;
 	}
@@ -261,7 +261,7 @@ export class RateLimitBanner extends HTMLElement {
 					<div class="banner-title">Rate Limit Exceeded</div>
 					<div class="banner-description">${this.getLimitExplanation()}</div>
 					<div class="banner-conditions" style="margin-top: 8px; font-size: 0.85rem; opacity: 0.9;">
-						<strong>Usage Policy:</strong> 5 minutes of usage, then 5 minutes cooldown period
+						<strong>Usage Policy:</strong> 15 minutes of usage, then 15 minutes cooldown period
 					</div>
 				</div>
 				</div>

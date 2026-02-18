@@ -1,4 +1,4 @@
-import { fetchWithProxy } from '../utils/proxy.js';
+import { API_BASE_URL } from '../config.js';
 
 export class StockRiskAnalysis extends HTMLElement {
 	constructor() {
@@ -505,11 +505,14 @@ export class StockRiskAnalysis extends HTMLElement {
 	}
 
 	async loadRiskAnalysis() {
+		const contentEl = this.shadowRoot?.getElementById('risk-content');
+		if (!contentEl) return;
+		
 		try {
 			// Fetch historical price data for the stock
 			await this.fetchPriceData();
 			
-			// Fetch market data (S&P 500) for beta calculation
+			// Fetch market data (S&P 500) for beta calculation - optional, continues without if it fails
 			await this.fetchMarketData();
 			
 			// Calculate risk metrics
@@ -519,42 +522,39 @@ export class StockRiskAnalysis extends HTMLElement {
 			this.renderRiskAnalysis(riskMetrics);
 		} catch (error) {
 			console.error('Error loading risk analysis:', error);
-			this.shadowRoot.getElementById('risk-content').innerHTML = 
-				'<div class="loading">Error loading risk analysis</div>';
+			const msg = error?.message || 'Error loading risk analysis';
+			contentEl.innerHTML = `<div class="loading">${msg}. Please try again or check your connection.</div>`;
 		}
 	}
 
 	async fetchPriceData() {
-		try {
-			const response = await fetch(`http://localhost:3000/api/yahoo/chart/${this.symbol}?interval=1d&range=1y`);
-			if (!response.ok) throw new Error('Failed to fetch price data');
-			
-			const data = await response.json();
-			if (!data.chart?.result?.[0]) throw new Error('No price data available');
-			
-			const result = data.chart.result[0];
-			const timestamps = result.timestamp || [];
-			const quotes = result.indicators?.quote?.[0] || {};
-			const closes = quotes.close || [];
-			
-			this.priceData = timestamps.map((ts, i) => ({
-				date: new Date(ts * 1000),
-				close: closes[i] || 0
-			})).filter(d => d.close > 0);
-		} catch (error) {
-			console.error('Error fetching price data:', error);
-			throw error;
-		}
+		if (!this.symbol) throw new Error('No symbol provided');
+		const url = `${API_BASE_URL}/api/yahoo/chart/${encodeURIComponent(this.symbol)}?interval=1d&range=1y`;
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Failed to fetch price data (${response.status})`);
+		
+		const data = await response.json().catch(() => ({}));
+		if (!data.chart?.result?.[0]) throw new Error('No price data available for this symbol');
+		
+		const result = data.chart.result[0];
+		const timestamps = result.timestamp || [];
+		const quotes = result.indicators?.quote?.[0] || {};
+		const closes = quotes.close || [];
+		
+		this.priceData = timestamps.map((ts, i) => ({
+			date: new Date(ts * 1000),
+			close: closes[i] != null ? Number(closes[i]) : 0
+		})).filter(d => d.close > 0 && !isNaN(d.close));
+		
+		if (this.priceData.length === 0) throw new Error('No valid price data');
 	}
 
 	async fetchMarketData() {
 		try {
-			// Use S&P 500 (^GSPC) as market benchmark
-			const response = await fetch(`http://localhost:3000/api/yahoo/chart/^GSPC?interval=1d&range=1y`);
-			if (!response.ok) throw new Error('Failed to fetch market data');
-			
-			const data = await response.json();
-			if (!data.chart?.result?.[0]) throw new Error('No market data available');
+			const response = await fetch(`${API_BASE_URL}/api/yahoo/chart/^GSPC?interval=1d&range=1y`);
+			if (!response.ok) return;
+			const data = await response.json().catch(() => ({}));
+			if (!data.chart?.result?.[0]) return;
 			
 			const result = data.chart.result[0];
 			const timestamps = result.timestamp || [];
@@ -563,65 +563,68 @@ export class StockRiskAnalysis extends HTMLElement {
 			
 			this.marketData = timestamps.map((ts, i) => ({
 				date: new Date(ts * 1000),
-				close: closes[i] || 0
-			})).filter(d => d.close > 0);
+				close: closes[i] != null ? Number(closes[i]) : 0
+			})).filter(d => d.close > 0 && !isNaN(d.close));
 		} catch (error) {
-			console.error('Error fetching market data:', error);
-			// Continue without market data - beta will be N/A
+			console.warn('Risk Analysis: Market data unavailable, beta will be N/A', error?.message);
+			this.marketData = [];
 		}
 	}
 
 	calculateRiskMetrics() {
-		if (this.priceData.length < 30) {
-			return null; // Not enough data
+		if (!this.priceData || this.priceData.length < 30) {
+			return null;
 		}
 
-		// Calculate daily returns
 		const returns = [];
 		for (let i = 1; i < this.priceData.length; i++) {
-			const dailyReturn = (this.priceData[i].close - this.priceData[i - 1].close) / this.priceData[i - 1].close;
-			returns.push(dailyReturn);
+			const prev = this.priceData[i - 1].close;
+			if (!prev || prev <= 0) continue;
+			const dailyReturn = (this.priceData[i].close - prev) / prev;
+			if (!isNaN(dailyReturn) && isFinite(dailyReturn)) returns.push(dailyReturn);
 		}
+		if (returns.length < 20) return null;
 
 		// Value at Risk (VaR) - 95% confidence level
 		const sortedReturns = [...returns].sort((a, b) => a - b);
-		const var95Index = Math.floor(sortedReturns.length * 0.05);
-		const var95 = Math.abs(sortedReturns[var95Index]) * 100;
+		const var95Index = Math.max(0, Math.floor(sortedReturns.length * 0.05));
+		const var95 = Math.abs(sortedReturns[var95Index] || 0) * 100;
+		if (isNaN(var95) || !isFinite(var95)) return null;
 
 		// Historical Volatility (annualized)
 		const meanReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
 		const variance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
-		const stdDev = Math.sqrt(variance);
-		const historicalVolatility = stdDev * Math.sqrt(252) * 100; // Annualized
+		const stdDev = Math.sqrt(Math.max(0, variance));
+		const historicalVolatility = stdDev * Math.sqrt(252) * 100;
+		if (isNaN(historicalVolatility) || !isFinite(historicalVolatility)) return null;
 
-		// Beta calculation (correlation with market)
+		// Beta calculation - align by date when lengths differ
 		let beta = null;
-		if (this.marketData.length > 0 && this.marketData.length === this.priceData.length) {
+		if (this.marketData && this.marketData.length >= 30) {
 			const marketReturns = [];
 			for (let i = 1; i < this.marketData.length; i++) {
-				const marketReturn = (this.marketData[i].close - this.marketData[i - 1].close) / this.marketData[i - 1].close;
-				marketReturns.push(marketReturn);
+				const prev = this.marketData[i - 1].close;
+				if (!prev || prev <= 0) continue;
+				const r = (this.marketData[i].close - prev) / prev;
+				if (!isNaN(r) && isFinite(r)) marketReturns.push(r);
 			}
-
-			// Align returns (use shorter length)
-			const minLength = Math.min(returns.length, marketReturns.length);
-			const alignedReturns = returns.slice(-minLength);
-			const alignedMarketReturns = marketReturns.slice(-minLength);
-
-			const marketMean = alignedMarketReturns.reduce((a, b) => a + b, 0) / alignedMarketReturns.length;
-			const stockMean = alignedReturns.reduce((a, b) => a + b, 0) / alignedReturns.length;
-
-			// Calculate covariance and market variance
-			let covariance = 0;
-			let marketVariance = 0;
-			for (let i = 0; i < minLength; i++) {
-				covariance += (alignedReturns[i] - stockMean) * (alignedMarketReturns[i] - marketMean);
-				marketVariance += Math.pow(alignedMarketReturns[i] - marketMean, 2);
+			const minLength = Math.min(returns.length, marketReturns.length, 252);
+			if (minLength >= 20) {
+				const alignedReturns = returns.slice(-minLength);
+				const alignedMarketReturns = marketReturns.slice(-minLength);
+				const marketMean = alignedMarketReturns.reduce((a, b) => a + b, 0) / alignedMarketReturns.length;
+				const stockMean = alignedReturns.reduce((a, b) => a + b, 0) / alignedReturns.length;
+				let covariance = 0;
+				let marketVariance = 0;
+				for (let i = 0; i < minLength; i++) {
+					covariance += (alignedReturns[i] - stockMean) * (alignedMarketReturns[i] - marketMean);
+					marketVariance += Math.pow(alignedMarketReturns[i] - marketMean, 2);
+				}
+				covariance /= minLength;
+				marketVariance /= minLength;
+				beta = marketVariance > 1e-10 ? covariance / marketVariance : null;
+				if (beta != null && (isNaN(beta) || !isFinite(beta))) beta = null;
 			}
-			covariance /= minLength;
-			marketVariance /= minLength;
-
-			beta = marketVariance > 0 ? covariance / marketVariance : null;
 		}
 
 		// Risk Score (0-100, higher = more risky)
@@ -661,30 +664,36 @@ export class StockRiskAnalysis extends HTMLElement {
 	}
 
 	renderRiskAnalysis(metrics) {
-		if (!metrics) {
-			this.shadowRoot.getElementById('risk-content').innerHTML = 
-				'<div class="loading">Insufficient data for risk analysis (need at least 30 days)</div>';
+		const contentEl = this.shadowRoot?.getElementById('risk-content');
+		if (!contentEl) return;
+		if (!metrics || typeof metrics.riskScore !== 'number') {
+			contentEl.innerHTML = '<div class="loading">Insufficient data for risk analysis (need at least 30 days of price data)</div>';
 			return;
 		}
-
-		const riskLevel = metrics.riskScore < 33 ? 'low' : metrics.riskScore < 66 ? 'medium' : 'high';
+		const var95 = Number(metrics.var95);
+		const vol = Number(metrics.historicalVolatility);
+		const riskScore = Math.min(100, Math.max(0, metrics.riskScore));
+		const riskLevel = riskScore < 33 ? 'low' : riskScore < 66 ? 'medium' : 'high';
 		const riskClass = `${riskLevel}-risk`;
 
+		const var95Str = isNaN(var95) ? 'N/A' : `${var95.toFixed(2)}%`;
+		const volStr = isNaN(vol) ? 'N/A' : `${vol.toFixed(2)}%`;
+		const betaStr = metrics.beta != null && !isNaN(metrics.beta) ? metrics.beta.toFixed(2) : 'N/A';
 		let html = `
 			<div class="risk-metrics-grid">
 				<div class="risk-card ${riskClass}">
 					<div class="risk-label">Value at Risk (95%)</div>
-					<div class="risk-value">${metrics.var95.toFixed(2)}%</div>
+					<div class="risk-value">${var95Str}</div>
 					<div class="risk-description">Maximum expected daily loss with 95% confidence</div>
 				</div>
 				<div class="risk-card ${riskClass}">
 					<div class="risk-label">Historical Volatility</div>
-					<div class="risk-value">${metrics.historicalVolatility.toFixed(2)}%</div>
+					<div class="risk-value">${volStr}</div>
 					<div class="risk-description">Annualized price volatility (252 trading days)</div>
 				</div>
 				<div class="risk-card ${riskClass}">
 					<div class="risk-label">Beta (vs. S&P 500)</div>
-					<div class="risk-value">${metrics.beta !== null ? metrics.beta.toFixed(2) : 'N/A'}</div>
+					<div class="risk-value">${betaStr}</div>
 					<div class="risk-description">${metrics.beta !== null ? 
 						(metrics.beta > 1 ? 'More volatile than market' : metrics.beta < 1 ? 'Less volatile than market' : 'Moves with market') : 
 						'Market correlation data unavailable'}</div>
@@ -692,7 +701,7 @@ export class StockRiskAnalysis extends HTMLElement {
 			</div>
 			<div class="risk-score-container">
 				<div class="risk-score-label">Overall Risk Score</div>
-				<div class="risk-score-value ${riskLevel}">${metrics.riskScore.toFixed(0)}</div>
+				<div class="risk-score-value ${riskLevel}">${riskScore.toFixed(0)}</div>
 				<div class="risk-score-interpretation">
 					${riskLevel === 'low' ? 'Low Risk - Conservative investment' : 
 					  riskLevel === 'medium' ? 'Medium Risk - Moderate volatility expected' : 
@@ -730,7 +739,7 @@ export class StockRiskAnalysis extends HTMLElement {
 			`;
 		}
 
-		this.shadowRoot.getElementById('risk-content').innerHTML = html;
+		contentEl.innerHTML = html;
 	}
 }
 

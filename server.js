@@ -429,6 +429,7 @@ const pythonApiPaths = [
 	'/api/ai-market-summary',
 	'/api/swot',
 	'/api/session-status',
+	'/api/session-start',
 	'/api/check-data',
 	'/api/health',
 	'/api/peer-comparison',
