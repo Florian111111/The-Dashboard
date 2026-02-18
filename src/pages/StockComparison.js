@@ -959,7 +959,7 @@ export class StockComparison extends HTMLElement {
 			let chartTimestamps = [];
 			try {
 				// Fetch YTD data (year-to-date)
-				const chartRes = await fetch(`http://localhost:3000/api/yahoo/chart/${symbol}?interval=1d&range=ytd`).catch(() => null);
+				const chartRes = await fetch(`${API_BASE_URL}/api/yahoo/chart/${symbol}?interval=1d&range=ytd`).catch(() => null);
 				if (chartRes?.ok) {
 					const chart = await chartRes.json();
 					const result = chart?.chart?.result?.[0];

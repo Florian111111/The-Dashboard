@@ -1280,7 +1280,7 @@ export class PortfolioTracking extends HTMLElement {
 		newCurrentPriceBtn.addEventListener('click', async () => {
 			// Fetch current price
 			try {
-				const response = await fetch(`http://localhost:3000/api/yahoo/quote?symbols=${symbol}`);
+				const response = await fetch(`${API_BASE_URL}/api/yahoo/quote?symbols=${symbol}`);
 				if (!response.ok) {
 					throw new Error(`HTTP ${response.status}`);
 				}
@@ -1563,7 +1563,7 @@ export class PortfolioTracking extends HTMLElement {
 		
 		// Fetch current prices for all stocks
 		const promises = this.portfolio.map(item => 
-			fetch(`http://localhost:3000/api/yahoo/quote?symbols=${item.symbol}`)
+			fetch(`${API_BASE_URL}/api/yahoo/quote?symbols=${item.symbol}`)
 				.then(res => res.json())
 				.then(data => {
 					const quote = data?.result?.[0];
@@ -1659,7 +1659,7 @@ export class PortfolioTracking extends HTMLElement {
 		
 		// Fetch current prices for all stocks
 		const promises = this.portfolio.map(item => 
-			fetch(`http://localhost:3000/api/yahoo/quote?symbols=${item.symbol}`)
+			fetch(`${API_BASE_URL}/api/yahoo/quote?symbols=${item.symbol}`)
 				.then(res => {
 					if (!res.ok) {
 						console.error(`[Portfolio] Failed to fetch quote for ${item.symbol} in updateWeights:`, res.status);
@@ -1801,7 +1801,7 @@ export class PortfolioTracking extends HTMLElement {
 				// Calculate total current value from the price map used in renderPortfolioList
 				// We need to fetch prices again or use the same price map
 				const pricePromises = this.portfolio.map(item => 
-					fetch(`http://localhost:3000/api/yahoo/quote?symbols=${item.symbol}`)
+					fetch(`${API_BASE_URL}/api/yahoo/quote?symbols=${item.symbol}`)
 						.then(res => {
 							if (!res.ok) throw new Error(`HTTP ${res.status}`);
 							return res.json();
@@ -1872,7 +1872,7 @@ export class PortfolioTracking extends HTMLElement {
 
 		// Fetch current prices for all stocks
 		const pricePromises = this.portfolio.map(item => 
-			fetch(`http://localhost:3000/api/yahoo/quote?symbols=${item.symbol}`)
+			fetch(`${API_BASE_URL}/api/yahoo/quote?symbols=${item.symbol}`)
 				.then(res => {
 					if (!res.ok) {
 						console.error(`[Portfolio] Failed to fetch quote for ${item.symbol}:`, res.status, res.statusText);
@@ -2127,7 +2127,7 @@ export class PortfolioTracking extends HTMLElement {
 					? item.sales.reduce((sum, sale) => sum + sale.shares, 0) 
 					: 0);
 				
-				return fetch(`http://localhost:3000/api/yahoo/chart/${item.symbol}?interval=${interval}&range=${apiRange}`)
+				return fetch(`${API_BASE_URL}/api/yahoo/chart/${item.symbol}?interval=${interval}&range=${apiRange}`)
 					.then(res => res.json())
 					.then(data => ({ 
 						symbol: item.symbol, 
@@ -2768,7 +2768,7 @@ export class PortfolioTracking extends HTMLElement {
 				? item.sales.reduce((sum, sale) => sum + sale.shares, 0) 
 				: 0);
 			
-			return fetch(`http://localhost:3000/api/yahoo/chart/${item.symbol}?interval=1d&range=${apiRange}`)
+			return fetch(`${API_BASE_URL}/api/yahoo/chart/${item.symbol}?interval=1d&range=${apiRange}`)
 				.then(res => res.json())
 				.then(data => ({ 
 					symbol: item.symbol, 
@@ -3164,7 +3164,7 @@ export class PortfolioTracking extends HTMLElement {
 
 			// Fetch data for all stocks
 			const promises = this.portfolio.map(item => 
-				fetch(`http://localhost:3000/api/yahoo/chart/${item.symbol}?interval=1d&range=${apiRange}`)
+				fetch(`${API_BASE_URL}/api/yahoo/chart/${item.symbol}?interval=1d&range=${apiRange}`)
 					.then(res => res.json())
 				.then(data => ({ 
 					symbol: item.symbol, 
@@ -3340,7 +3340,7 @@ export class PortfolioTracking extends HTMLElement {
 				}
 			}
 			
-			const sp500Response = await fetch(`http://localhost:3000/api/yahoo/chart/^GSPC?interval=1d&range=${apiRange}`);
+			const sp500Response = await fetch(`${API_BASE_URL}/api/yahoo/chart/^GSPC?interval=1d&range=${apiRange}`);
 			if (sp500Response.ok) {
 				const sp500Data = await sp500Response.json();
 				const sp500Prices = sp500Data.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];

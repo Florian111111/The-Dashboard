@@ -1941,7 +1941,7 @@ export class BacktestingPro extends HTMLElement {
 	
 	async loadBuyHoldHistoricalData() {
 		try {
-			const response = await fetch(`http://localhost:3000/api/yahoo/chart/${this.buyHoldSymbol}?interval=1d&range=${this.timeRange}`);
+			const response = await fetch(`${API_BASE_URL}/api/yahoo/chart/${this.buyHoldSymbol}?interval=1d&range=${this.timeRange}`);
 			if (!response.ok) {
 				throw new Error(`Failed to fetch Buy-and-Hold data: ${response.status}`);
 			}
@@ -1977,7 +1977,7 @@ export class BacktestingPro extends HTMLElement {
 	async loadHistoricalData() {
 		// Fetch historical data based on selected time range
 		try {
-			const response = await fetch(`http://localhost:3000/api/yahoo/chart/${this.symbol}?interval=1d&range=${this.timeRange}`);
+			const response = await fetch(`${API_BASE_URL}/api/yahoo/chart/${this.symbol}?interval=1d&range=${this.timeRange}`);
 			if (!response.ok) {
 				throw new Error(`Failed to fetch data: ${response.status}`);
 			}
