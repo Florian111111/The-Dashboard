@@ -971,7 +971,25 @@ export class PortfolioTracking extends HTMLElement {
 			:host(.light-mode) .disclaimer-footer a {
 				color: var(--accent-blue);
 				}
+				.construction-banner {
+					background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+					color: #1a1a1a;
+					padding: 10px 20px;
+					margin: -20px -20px 20px -20px;
+					text-align: center;
+					font-weight: 600;
+					font-size: 0.9rem;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					gap: 8px;
+				}
+				:host(.light-mode) .construction-banner {
+					background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+					color: #1a1a1a;
+				}
 			</style>
+			<div class="construction-banner">⚠️ Under Construction – This feature may contain bugs and is still being improved.</div>
 			<button class="back-btn" id="back-btn">← Back to Market</button>
 			<div class="header">
 				<h1 class="page-title">Portfolio Tracking & Analysis</h1>
@@ -991,7 +1009,7 @@ export class PortfolioTracking extends HTMLElement {
 					<div class="input-wrapper">
 						<label class="input-label">Stock/ETF Symbol</label>
 						<div style="position: relative;">
-							<input type="text" class="input-field" id="symbol-input" placeholder="e.g., AAPL or Apple" maxlength="10" autocomplete="off" />
+							<input type="text" class="input-field" id="symbol-input" placeholder="e.g., AAPL" maxlength="10" autocomplete="off" />
 							<div class="autocomplete-dropdown" id="symbol-autocomplete-dropdown"></div>
 						</div>
 					</div>

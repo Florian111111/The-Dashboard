@@ -624,7 +624,25 @@ export class StockComparison extends HTMLElement {
 			:host(.light-mode) .disclaimer-footer a {
 				color: var(--accent-blue);
 			}
-		</style>
+				.construction-banner {
+					background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+					color: #1a1a1a;
+					padding: 10px 20px;
+					margin: -20px -20px 20px -20px;
+					text-align: center;
+					font-weight: 600;
+					font-size: 0.9rem;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					gap: 8px;
+				}
+				:host(.light-mode) .construction-banner {
+					background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+					color: #1a1a1a;
+				}
+			</style>
+			<div class="construction-banner">⚠️ Under Construction – This feature may contain bugs and is still being improved.</div>
 			<div class="header">
 				<h1>📊 Stock Comparison</h1>
 				<div class="header-right">
@@ -645,21 +663,21 @@ export class StockComparison extends HTMLElement {
 					<div class="input-group">
 						<label class="input-label">Stock 1</label>
 						<div style="position: relative;">
-							<input type="text" class="stock-input" id="stock1-input" placeholder="AAPL or Apple" autocomplete="off" />
+							<input type="text" class="stock-input" id="stock1-input" placeholder="e.g., AAPL" autocomplete="off" />
 							<div class="autocomplete-dropdown" id="autocomplete-dropdown-1"></div>
 						</div>
 					</div>
 					<div class="input-group">
 						<label class="input-label">Stock 2</label>
 						<div style="position: relative;">
-							<input type="text" class="stock-input" id="stock2-input" placeholder="MSFT or Microsoft" autocomplete="off" />
+							<input type="text" class="stock-input" id="stock2-input" placeholder="e.g., MSFT" autocomplete="off" />
 							<div class="autocomplete-dropdown" id="autocomplete-dropdown-2"></div>
 						</div>
 					</div>
 					<div class="input-group">
 						<label class="input-label">Stock 3 (Optional)</label>
 						<div style="position: relative;">
-							<input type="text" class="stock-input" id="stock3-input" placeholder="GOOGL or Google" autocomplete="off" />
+							<input type="text" class="stock-input" id="stock3-input" placeholder="e.g., GOOGL" autocomplete="off" />
 							<div class="autocomplete-dropdown" id="autocomplete-dropdown-3"></div>
 						</div>
 					</div>

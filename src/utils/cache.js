@@ -42,7 +42,10 @@ export function getCachedData(symbol, dataType) {
 		}
 		
 		const { data, timestamp } = JSON.parse(cached);
-		const cacheDuration = CACHE_DURATIONS[dataType] || 60 * 60 * 1000; // Default 1 hour
+		// market-overview-1D, market-overview-1W etc. use same duration as market-overview
+		const cacheDuration = CACHE_DURATIONS[dataType] ||
+			(dataType?.startsWith('market-overview') ? CACHE_DURATIONS['market-overview'] : null) ||
+			60 * 60 * 1000; // Default 1 hour
 		const now = Date.now();
 		
 		// Check if cache is still valid

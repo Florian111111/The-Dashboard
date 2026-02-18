@@ -164,7 +164,9 @@ class App {
 			}
 			
 			// Add global click listener to start session timer on first user interaction
-			document.addEventListener('click', (e) => {
+			// Session only starts on click - not on page load (prevents banner appearing immediately)
+			const SESSION_DURATION_SECONDS = 900; // 15 minutes
+			document.addEventListener('click', async (e) => {
 				if (!this.sessionStarted && this.sessionTimer) {
 					// Check if cooldown period is active - if so, don't start session
 					const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
@@ -182,9 +184,25 @@ class App {
 					// Check again if session exists (might have been restored)
 					const existingSession = localStorage.getItem('session_end_timestamp');
 					if (!existingSession) {
-						console.log('[Session Timer] First click detected, starting session timer');
+						console.log('[Session Timer] First click detected, starting session (15 min)');
 						this.sessionStarted = true;
-						this.sessionTimer.show(300); // 5 minutes = 300 seconds
+						// Start backend session first (required for fundamentals, heatmap-quotes, etc.)
+						try {
+							const response = await fetch(`${API_BASE_URL}/api/session-start`, { method: 'POST' });
+							if (response.ok) {
+								const data = await response.json();
+								let sessionRemaining = data.session_remaining ?? SESSION_DURATION_SECONDS;
+								// Ensure at least 15 min (backend may have old 5-min config)
+								if (sessionRemaining < 600) sessionRemaining = SESSION_DURATION_SECONDS;
+								this.sessionTimer.show(sessionRemaining);
+							} else {
+								// Fallback to local timer if session-start fails (e.g. backend down)
+								this.sessionTimer.show(SESSION_DURATION_SECONDS);
+							}
+						} catch (err) {
+							console.warn('[Session Timer] session-start failed, using local timer:', err.message);
+							this.sessionTimer.show(SESSION_DURATION_SECONDS);
+						}
 					} else {
 						this.sessionStarted = true;
 					}
@@ -752,18 +770,20 @@ class App {
 			try {
 				const response = await originalFetch.apply(this, args);
 
-				// Check for rate limit error (429) - Session expired, show banner
+				// Check for rate limit error (429) - Session expired or not started
 				if (response.status === 429) {
-					const retryAfter = parseInt(response.headers.get('Retry-After') || '300');
+					const retryAfter = parseInt(response.headers.get('Retry-After') || '900');
 					const limitType = response.headers.get('X-RateLimit-Type') || 'session_cooldown';
 
-					// Show rate limit banner
-					if (self.rateLimitBanner) {
-						self.rateLimitBanner.show(retryAfter, limitType, 0, 0);
+					// retry_after=0 means "click to start session" - don't show banner
+					if (retryAfter > 0) {
+						// Show rate limit banner (cooldown period)
+						if (self.rateLimitBanner) {
+							self.rateLimitBanner.show(retryAfter, limitType, 0, 0);
+						}
+						// Disable search on all pages
+						self.disableSearchDuringCooldown();
 					}
-
-					// Disable search on all pages
-					self.disableSearchDuringCooldown();
 
 					// Try to get error message from response body
 					try {
@@ -798,28 +818,17 @@ class App {
 						}
 					}
 
-					// Check for session remaining time in header
+					// Check for session remaining time in header - only UPDATE when positive and >= 10 min
+					// Ignore values < 600 to prevent backend's 5-min config from overwriting our 15-min display
+					// (e.g. crypto-overview/time-range change returns backend's remaining which may be 300)
 					const sessionRemaining = response.headers.get('X-Session-Remaining');
 					if (sessionRemaining !== null) {
 						const remainingSeconds = parseInt(sessionRemaining, 10);
-						console.log('[Session Timer] X-Session-Remaining header:', sessionRemaining, 'seconds:', remainingSeconds);
-						if (!isNaN(remainingSeconds) && remainingSeconds > 0) {
-							// Update session timer with remaining time from backend (sync with backend time)
-							if (self.sessionTimer) {
-								console.log('[Session Timer] Updating timer with', remainingSeconds, 'seconds');
-								self.sessionTimer.show(remainingSeconds);
-							} else {
-								console.warn('[Session Timer] sessionTimer element not found!');
-							}
-						} else {
-							// Session expired - hide timer (banner will be shown by SessionTimer.triggerRateLimitBanner)
-							if (self.sessionTimer) {
-								console.log('[Session Timer] Hiding timer (session expired or no session)');
-								self.sessionTimer.hide();
-							}
+						if (!isNaN(remainingSeconds) && remainingSeconds >= 600 && self.sessionTimer) {
+							self.sessionTimer.show(remainingSeconds);
 						}
+						// Do NOT hide when remaining is 0 - let local countdown handle expiration
 					}
-					// Note: Don't hide timer if header is missing - it might be shown by click listener
 				}
 
 				return response;

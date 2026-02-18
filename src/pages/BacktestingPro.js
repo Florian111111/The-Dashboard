@@ -780,8 +780,21 @@ export class BacktestingPro extends HTMLElement {
 			:host(.light-mode) .disclaimer-footer a {
 				color: var(--accent-blue);
 			}
+			.construction-banner {
+				background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+				color: #1a1a1a;
+				padding: 10px 20px;
+				margin: -20px -20px 20px -20px;
+				text-align: center;
+				font-weight: 600;
+				font-size: 0.9rem;
+			}
+			:host(.light-mode) .construction-banner {
+				background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+				color: #1a1a1a;
+			}
 		</style>
-			
+			<div class="construction-banner">⚠️ Under Construction – This feature may contain bugs and is still being improved.</div>
 			<div class="header">
 				<h1>🚀 Backtesting Engine Pro</h1>
 				<div style="display: flex; gap: 15px; align-items: center;">
@@ -803,14 +816,14 @@ export class BacktestingPro extends HTMLElement {
 					<div class="input-group">
 						<label class="input-label">Stock Symbol</label>
 						<div style="position: relative;">
-							<input type="text" class="input-field" id="symbol-input" placeholder="e.g., AAPL or Apple" maxlength="10" autocomplete="off" />
+							<input type="text" class="input-field" id="symbol-input" placeholder="e.g., AAPL" maxlength="10" autocomplete="off" />
 							<div class="autocomplete-dropdown" id="symbol-autocomplete-dropdown"></div>
 						</div>
 					</div>
 					<div class="input-group">
 						<label class="input-label">Buy-and-Hold Comparison Stock</label>
 						<div style="position: relative;">
-							<input type="text" class="input-field" id="buyhold-symbol-input" placeholder="e.g., SPY or S&P 500" maxlength="10" autocomplete="off" />
+							<input type="text" class="input-field" id="buyhold-symbol-input" placeholder="e.g., SPY" maxlength="10" autocomplete="off" />
 							<div class="autocomplete-dropdown" id="buyhold-autocomplete-dropdown"></div>
 						</div>
 					</div>

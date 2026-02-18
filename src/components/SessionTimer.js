@@ -9,9 +9,32 @@ export class SessionTimer extends HTMLElement {
 
 	connectedCallback() {
 		this.render();
-		
-		// Check if session exists in localStorage (persistent across page reloads)
 		this.restoreSession();
+		this._navHandler = () => this.ensureTimerVisibleIfActive();
+		window.addEventListener('navigate', this._navHandler);
+	}
+	
+	disconnectedCallback() {
+		if (this._navHandler) window.removeEventListener('navigate', this._navHandler);
+		if (this.countdownInterval) {
+			clearInterval(this.countdownInterval);
+			this.countdownInterval = null;
+		}
+	}
+	
+	ensureTimerVisibleIfActive() {
+		const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+		if (!sessionEndTimestamp) return;
+		const sessionEnd = parseInt(sessionEndTimestamp, 10);
+		const remaining = Math.max(0, Math.floor((sessionEnd - Date.now()) / 1000));
+		if (remaining > 0) {
+			const timerElement = this.shadowRoot?.querySelector('.session-timer');
+			if (timerElement && !timerElement.classList.contains('show')) {
+				timerElement.classList.add('show');
+				this.remainingSeconds = remaining;
+				this.updateDisplay();
+			}
+		}
 	}
 	
 	restoreSession() {
@@ -30,10 +53,20 @@ export class SessionTimer extends HTMLElement {
 		}
 		
 		const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
+		const sessionDuration = parseInt(localStorage.getItem('session_duration') || '0', 10);
 		if (sessionEndTimestamp) {
 			const sessionEnd = parseInt(sessionEndTimestamp, 10);
 			const now = Date.now();
 			const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
+			
+			// Only invalidate explicit old 5-min sessions (session_duration was 300)
+			// Don't clear when missing/0 - could be valid 15-min session from before we stored duration
+			if (sessionDuration === 300) {
+				localStorage.removeItem('session_end_timestamp');
+				localStorage.removeItem('session_duration');
+				console.log('[Session Timer] Cleared old 5-min session');
+				return;
+			}
 			
 			if (remaining > 0) {
 				// Session still active - restore timer
@@ -48,12 +81,6 @@ export class SessionTimer extends HTMLElement {
 		}
 	}
 
-	disconnectedCallback() {
-		if (this.countdownInterval) {
-			clearInterval(this.countdownInterval);
-			this.countdownInterval = null;
-		}
-	}
 
 	show(remainingSeconds) {
 		if (remainingSeconds <= 0) {
@@ -63,9 +90,10 @@ export class SessionTimer extends HTMLElement {
 		
 		this.remainingSeconds = remainingSeconds;
 		
-		// Save session_end timestamp to localStorage (persistent across page reloads)
+		// Save session_end timestamp and duration to localStorage (persistent across page reloads)
 		const sessionEndTimestamp = Date.now() + (remainingSeconds * 1000);
 		localStorage.setItem('session_end_timestamp', sessionEndTimestamp.toString());
+		localStorage.setItem('session_duration', remainingSeconds.toString()); // 900 = 15 min, used to invalidate old 5-min sessions
 		
 		const timerElement = this.shadowRoot.querySelector('.session-timer');
 		if (timerElement) {
@@ -89,8 +117,9 @@ export class SessionTimer extends HTMLElement {
 		this.remainingSeconds = 0;
 		this.updateDisplay();
 		
-		// Remove session_end from localStorage when timer is hidden
+		// Remove session data from localStorage when timer is hidden
 		localStorage.removeItem('session_end_timestamp');
+		localStorage.removeItem('session_duration');
 	}
 
 	startCountdown() {
@@ -131,7 +160,7 @@ export class SessionTimer extends HTMLElement {
 
 	triggerRateLimitBanner() {
 		// Show rate limit banner when session expires
-		const COOLDOWN_DURATION = 300; // 5 minutes in seconds
+		const COOLDOWN_DURATION = 900; // 15 minutes in seconds
 		
 		// Save cooldown_end timestamp to localStorage (persistent across page reloads)
 		const cooldownEndTimestamp = Date.now() + (COOLDOWN_DURATION * 1000);
