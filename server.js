@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const path = require('path');
+const WebSocket = require('ws');
 
 // Load environment variables from .env file
 require('dotenv').config();
@@ -14,12 +15,16 @@ const PORT = process.env.NODE_PORT || 3000;
 // ===========================================
 const FRED_API_KEY = process.env.FRED_API_KEY;
 const GEMINI_API_KEY = process.env.GOOGLE_API_KEY;
+const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY;
 
 if (!FRED_API_KEY) {
 	console.warn('⚠️  WARNING: FRED_API_KEY not set in .env file');
 }
 if (!GEMINI_API_KEY) {
 	console.warn('⚠️  WARNING: GOOGLE_API_KEY not set in .env file');
+}
+if (!AISSTREAM_API_KEY) {
+	console.warn('⚠️  WARNING: AISSTREAM_API_KEY not set – Vessels layer will be empty. Get a free key at https://aisstream.io');
 }
 
 // Enable CORS for all routes
@@ -571,6 +576,200 @@ app.get('/api/fred/observations', async (req, res) => {
 	}
 });
 
+// ===========================================
+// AIS Vessel positions (AISStream) – optional
+// ===========================================
+const vesselCache = new Map(); // mmsi -> { lat, lon, name, shipType, sog, cog, ... }
+const vesselTrack = new Map(); // mmsi -> [{ lat, lon, ts }, ...] last N positions for route
+const VESSEL_MAX_AGE_MS = 30 * 60 * 1000; // drop positions older than 30 min
+const VESSEL_TRACK_MAX_POINTS = 200; // keep last 200 positions per vessel (~1–2 h at 30s interval)
+let aisStreamMessageCount = 0;
+let aisStreamRawCount = 0;
+
+// Recursively get first number from obj that looks like MMSI (9 digits) or lat/lon
+function findInObj(obj, keys, pred) {
+	if (obj == null || typeof obj !== 'object') return undefined;
+	for (const k of keys) {
+		const v = obj[k];
+		if (v != null && pred(v)) return v;
+	}
+	for (const v of Object.values(obj)) {
+		if (typeof v === 'object' && v !== null) {
+			const found = findInObj(v, keys, pred);
+			if (found !== undefined) return found;
+		}
+	}
+	return undefined;
+}
+
+function startAISStream() {
+	if (!AISSTREAM_API_KEY) return;
+	const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+	ws.on('open', () => {
+		// AISStream: Apikey + BoundingBoxes (array of boxes: [[minLat, minLon], [maxLat, maxLon]])
+		const sub = {
+			Apikey: AISSTREAM_API_KEY,
+			BoundingBoxes: [[[-90, -180], [90, 180]]]
+		};
+		ws.send(JSON.stringify(sub));
+		console.log('AISStream WebSocket connected – subscription sent');
+	});
+	ws.on('message', (data) => {
+		aisStreamRawCount++;
+		try {
+			const raw = data.toString();
+			const msg = JSON.parse(raw);
+			if (aisStreamRawCount <= 2) console.log('AISStream raw message #' + aisStreamRawCount + ' keys:', Object.keys(msg).join(', '), '| sample:', raw.slice(0, 300));
+			// Handle error response from AISStream
+			if (msg.error || msg.Error) {
+				console.warn('AISStream server error:', msg.error || msg.Error);
+				return;
+			}
+			// AISStream: MessageType + Message.PositionReport (UserID=MMSI, Latitude, Longitude) or Message.ShipStaticData
+			const msgType = msg.MessageType || (msg.Meta && msg.Meta.MessageType);
+			const inner = msg.Message || msg;
+			const posPayload = (inner && (inner.PositionReport || inner.position_report)) || (msgType === 'PositionReport' && msg.PositionReport) || msg.PositionReport || msg.position_report || msg.StandardClassBPositionReport || (msg.Latitude != null || msg.lat != null ? msg : null);
+			const pos = posPayload || (msgType && msg[msgType]) || null;
+			const statPayload = (inner && (inner.ShipStaticData || inner.StaticData)) || msg.ShipStaticData || msg.StaticData || msg.ship_static_data;
+			const stat = statPayload || null;
+			let mmsi = (pos && (pos.UserID ?? pos.Mmsi ?? pos.mmsi)) || (stat && (stat.UserID ?? stat.Mmsi ?? stat.mmsi)) || (msg.Mmsi ?? msg.mmsi);
+			if (!mmsi && msg) mmsi = findInObj(msg, ['UserID', 'Mmsi', 'mmsi', 'MMSI'], (v) => typeof v === 'number' && v >= 200000000 && v <= 799999999);
+			if (!mmsi) return;
+			aisStreamMessageCount++;
+			let v = vesselCache.get(mmsi) || { mmsi, updated: 0 };
+			if (pos) {
+				let lat = pos.Latitude ?? pos.lat;
+				let lon = pos.Longitude ?? pos.lon;
+				if ((lat == null || lon == null) && msg) {
+					lat = lat ?? findInObj(msg, ['Latitude', 'lat'], (x) => typeof x === 'number' && x >= -90 && x <= 90);
+					lon = lon ?? findInObj(msg, ['Longitude', 'lon'], (x) => typeof x === 'number' && x >= -180 && x <= 180);
+				}
+				if (lat != null && lon != null) {
+					v.lat = lat;
+					v.lon = lon;
+					v.sog = pos.Sog ?? pos.sog ?? pos.Speed ?? pos.speed;
+					v.cog = pos.Cog ?? pos.cog ?? pos.Course ?? pos.course;
+					v.heading = pos.Heading ?? pos.heading;
+					v.updated = Date.now();
+					// Append to track history for route display
+					let track = vesselTrack.get(mmsi) || [];
+					track.push({ lat, lon, ts: v.updated });
+					if (track.length > VESSEL_TRACK_MAX_POINTS) track = track.slice(-VESSEL_TRACK_MAX_POINTS);
+					vesselTrack.set(mmsi, track);
+				}
+			}
+			if (stat) {
+				v.name = stat.ShipName ?? stat.shipname ?? stat.Name ?? stat.name ?? v.name;
+				v.shipType = stat.ShipType ?? stat.shiptype ?? stat.VesselType ?? stat.vessel_type ?? v.shipType;
+				v.updated = Math.max(v.updated || 0, Date.now());
+			}
+			vesselCache.set(mmsi, v);
+		} catch (e) {
+			if (aisStreamRawCount <= 3) console.warn('AISStream parse error:', e.message, '| raw start:', data.toString().slice(0, 150));
+		}
+	});
+	ws.on('error', (err) => console.warn('AISStream WebSocket error:', err.message));
+	ws.on('close', (code, reason) => {
+		console.log('AISStream WebSocket closed – code:', code, 'reason:', reason?.toString() || '-', '| reconnecting in 30s');
+		setTimeout(startAISStream, 30000);
+	});
+}
+
+// Proxy for map layers (avoids CORS when loading ArcGIS/NOAA from frontend)
+const MAP_LAYER_PROXY = {
+	'submarine-cables': 'https://services.arcgis.com/6DIQcwlPy8knb6sg/arcgis/rest/services/SubmarineCables/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson',
+	'pipelines': 'https://gis.ngdc.noaa.gov/arcgis/rest/services/GulfDataAtlas/BOEM_OilAndGasPipelines/MapServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=2000&f=geojson'
+};
+app.get('/api/map-layer/:name', async (req, res) => {
+	const url = MAP_LAYER_PROXY[req.params.name];
+	if (!url) return res.status(404).json({ error: 'Unknown map layer' });
+	try {
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(response.statusText);
+		const data = await response.json();
+		res.setHeader('Content-Type', 'application/json');
+		res.json(data);
+	} catch (e) {
+		console.warn('Map layer proxy failed:', req.params.name, e.message);
+		res.status(502).json({ type: 'FeatureCollection', features: [] });
+	}
+});
+
+// GET /api/vessels/status – debug: cache size and message count (no auth)
+app.get('/api/vessels/status', (req, res) => {
+	res.json({ cacheSize: vesselCache.size, messageCount: aisStreamMessageCount, rawMessageCount: aisStreamRawCount, hasKey: !!AISSTREAM_API_KEY });
+});
+
+// GET /api/vessels – GeoJSON of vessel positions (from AISStream cache)
+// Query: latmin, latmax, lonmin, lonmax (default world), cargoOnly=1 to filter cargo/container (ship type 70–79)
+app.get('/api/vessels', (req, res) => {
+	try {
+		const latmin = parseFloat(req.query.latmin);
+		const latmax = parseFloat(req.query.latmax);
+		const lonmin = parseFloat(req.query.lonmin);
+		const lonmax = parseFloat(req.query.lonmax);
+		const cargoOnly = req.query.cargoOnly === '1' || req.query.cargoOnly === 'true';
+		const now = Date.now();
+		const features = [];
+		for (const v of vesselCache.values()) {
+			if (v.lat == null || v.updated == null || now - v.updated > VESSEL_MAX_AGE_MS) continue;
+			const lat = Number(v.lat);
+			const lon = Number(v.lon);
+			if (isNaN(lat) || isNaN(lon)) continue;
+			if (latmin != null && !isNaN(latmin) && lat < latmin) continue;
+			if (latmax != null && !isNaN(latmax) && lat > latmax) continue;
+			if (lonmin != null && !isNaN(lonmin) && lon < lonmin) continue;
+			if (lonmax != null && !isNaN(lonmax) && lon > lonmax) continue;
+			const shipType = v.shipType != null ? Number(v.shipType) : NaN;
+			if (cargoOnly && !isNaN(shipType) && (shipType < 70 || shipType > 79)) continue; // 70–79 = cargo
+			features.push({
+				type: 'Feature',
+				properties: {
+					mmsi: v.mmsi,
+					name: v.name || `MMSI ${v.mmsi}`,
+					type: 'Vessel',
+					description: v.shipType != null ? `Ship type: ${v.shipType}` : '',
+					location: v.sog != null ? `Speed: ${Number(v.sog).toFixed(1)} kn` : '',
+					sog: v.sog,
+					cog: v.cog,
+					shipType: v.shipType
+				},
+				geometry: { type: 'Point', coordinates: [lon, lat] }
+			});
+		}
+		res.setHeader('Content-Type', 'application/json');
+		res.setHeader('Cache-Control', 'no-store, max-age=0');
+		res.json({ type: 'FeatureCollection', features });
+	} catch (e) {
+		console.error('Vessels API error:', e);
+		res.status(500).json({ error: e.message || 'Vessels API error' });
+	}
+});
+
+// GET /api/vessels/:mmsi/track – past positions for route (last ~1–2 h) + current vessel info
+app.get('/api/vessels/:mmsi/track', (req, res) => {
+	const mmsi = req.params.mmsi;
+	const v = vesselCache.get(mmsi);
+	const track = vesselTrack.get(mmsi) || [];
+	const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+	const points = track.filter(p => p.ts >= twoHoursAgo).map(p => [p.lat, p.lon]);
+	res.setHeader('Content-Type', 'application/json');
+	res.setHeader('Cache-Control', 'no-store, max-age=0');
+	if (!v) return res.json({ track: points, vessel: null });
+	res.json({
+		track: points,
+		vessel: {
+			mmsi: v.mmsi,
+			name: v.name || `MMSI ${v.mmsi}`,
+			lat: v.lat,
+			lon: v.lon,
+			sog: v.sog,
+			cog: v.cog,
+			shipType: v.shipType
+		}
+	});
+});
+
 // Serve index.html for all other routes (SPA routing)
 // This must come LAST - after all API routes and static file serving
 // express.static will handle actual file requests before this route is reached
@@ -585,5 +784,7 @@ app.listen(PORT, () => {
 	console.log(`   - GET /api/yahoo/chart/:symbol?interval=1d&range=1y`);
 	console.log(`   - GET /api/yahoo/quoteSummary/:symbol?modules=...`);
 	console.log(`   - GET /api/fred/observations?series_id=...&api_key=...`);
+	console.log(`   - GET /api/vessels?latmin=&latmax=&lonmin=&lonmax=&cargoOnly=1`);
+	if (AISSTREAM_API_KEY) startAISStream();
 });
 
