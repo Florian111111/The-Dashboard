@@ -59,7 +59,7 @@ def check_environment_variables():
     # Rate Limiting
     rate_limit_vars = {
         "SESSION_DURATION": os.getenv("SESSION_DURATION", "900"),
-        "COOLDOWN_DURATION": os.getenv("COOLDOWN_DURATION", "900"),
+        "COOLDOWN_DURATION": os.getenv("COOLDOWN_DURATION", "60"),
         "RATE_LIMIT_REQUESTS": os.getenv("RATE_LIMIT_REQUESTS", "100"),
         "RATE_LIMIT_WINDOW": os.getenv("RATE_LIMIT_WINDOW", "60"),
     }
@@ -207,7 +207,7 @@ RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # Time window in 
 # Session-based rate limiting: 15 minutes usage, then 15 minutes cooldown
 session_rate_limit_cache = {}
 SESSION_DURATION = int(os.getenv("SESSION_DURATION", "900"))  # 15 minutes usage
-COOLDOWN_DURATION = int(os.getenv("COOLDOWN_DURATION", "900"))  # 15 minutes cooldown
+COOLDOWN_DURATION = int(os.getenv("COOLDOWN_DURATION", "60"))  # 1 minute cooldown
 
 def check_rate_limit(ip: str) -> bool:
     """Check if IP has exceeded rate limit"""
@@ -234,7 +234,7 @@ def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dic
     Check session-based rate limit:
     - User can use the website for 15 minutes (timer starts on first user click / session-start)
     - Timer continues running even if more API requests are made (does NOT reset)
-    - Then must wait 15 minutes before using again (cooldown)
+    - Then must wait 1 minute before using again (cooldown)
     - During cooldown, no searches/stock analyses are allowed
     - After cooldown: Session only starts when start_session_if_new=True (i.e., when API is actually used)
     - If no action is taken after cooldown, no session starts (session_remaining=0)

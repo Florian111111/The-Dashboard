@@ -160,7 +160,7 @@ export class SessionTimer extends HTMLElement {
 
 	triggerRateLimitBanner() {
 		// Show rate limit banner when session expires
-		const COOLDOWN_DURATION = 900; // 15 minutes in seconds
+		const COOLDOWN_DURATION = 60; // 1 minute cooldown after session
 		
 		// Save cooldown_end timestamp to localStorage (persistent across page reloads)
 		const cooldownEndTimestamp = Date.now() + (COOLDOWN_DURATION * 1000);

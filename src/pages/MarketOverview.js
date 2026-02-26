@@ -10,6 +10,7 @@ export class MarketOverview extends HTMLElement {
 		this.topPerformers = []; // Cache for top performers
 		this.searchController = null; // AbortController for search requests
 		this.currentSearchQuery = null; // Track current search query to avoid race conditions
+		this.worldMap = null; // Leaflet map instance for cleanup
 	}
 
 	connectedCallback() {
@@ -1450,7 +1451,7 @@ export class MarketOverview extends HTMLElement {
 				}
 				.two-panel-layout {
 					display: grid;
-					grid-template-columns: 1.25fr 0.75fr;
+					grid-template-columns: 1.25fr 1fr 0.75fr;
 					gap: 20px;
 					margin: 30px 0;
 					width: 100%;
@@ -1458,9 +1459,193 @@ export class MarketOverview extends HTMLElement {
 				.two-panel-layout .right-panel {
 					width: 100%;
 				}
-				.left-panel, .right-panel {
+				.left-panel, .middle-panel, .right-panel {
 					display: flex;
 					flex-direction: column;
+					min-height: 0;
+				}
+				.livestream-container {
+					flex: 1;
+					min-height: 200px;
+					position: relative;
+					background: #0b0f14;
+					border-radius: 8px;
+					overflow: hidden;
+				}
+				.livestream-container iframe {
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					height: 100%;
+					border: none;
+				}
+				/* Live Webcams section */
+				.webcams-section {
+					margin: 30px 0;
+					width: 100%;
+				}
+				.webcams-section .section-group {
+					padding: 16px;
+				}
+				.webcams-grid {
+					display: grid;
+					grid-template-columns: repeat(3, 1fr);
+					gap: 16px;
+					width: 100%;
+				}
+				@media (max-width: 1200px) {
+					.webcams-grid {
+						grid-template-columns: repeat(2, 1fr);
+					}
+				}
+				.webcam-cell {
+					background: #0b0f14;
+					border: 1px solid #1f2a37;
+					border-radius: 10px;
+					overflow: hidden;
+					display: flex;
+					flex-direction: column;
+					min-height: 0;
+				}
+				:host(.light-mode) .webcam-cell {
+					background: var(--bg-card);
+					border-color: var(--border-color);
+				}
+				.webcam-cell-title {
+					font-size: 0.85rem;
+					font-weight: 600;
+					color: #e6edf3;
+					padding: 10px 12px;
+					text-align: center;
+					background: #121821;
+					border-bottom: 1px solid #1f2a37;
+					flex-shrink: 0;
+				}
+				:host(.light-mode) .webcam-cell-title {
+					color: var(--text-primary);
+					background: var(--bg-secondary);
+					border-bottom-color: var(--border-color);
+				}
+				.webcam-cell-iframe {
+					flex: 1;
+					min-height: 160px;
+					position: relative;
+				}
+				.webcam-cell-iframe iframe {
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					height: 100%;
+					border: none;
+				}
+				/* World map section */
+				.worldmap-section {
+					margin: 30px 0;
+					width: 100%;
+				}
+				.worldmap-section .section-group {
+					padding: 16px;
+				}
+				.worldmap-wrapper {
+					display: flex;
+					gap: 0;
+					width: 100%;
+					height: 480px;
+					border-radius: 10px;
+					overflow: hidden;
+					background: #0b0f14;
+					border: 1px solid #1f2a37;
+				}
+				:host(.light-mode) .worldmap-wrapper {
+					background: var(--bg-card);
+					border-color: var(--border-color);
+				}
+				.worldmap-container {
+					flex: 1;
+					min-width: 0;
+					height: 100%;
+					background: #0b0f14;
+				}
+				.worldmap-layers-panel {
+					width: 240px;
+					flex-shrink: 0;
+					background: #121821;
+					border-left: 1px solid #1f2a37;
+					padding: 12px;
+					overflow-y: auto;
+				}
+				:host(.light-mode) .worldmap-layers-panel {
+					background: var(--bg-secondary);
+					border-left-color: var(--border-color);
+				}
+				.worldmap-layers-panel-title {
+					font-size: 0.85rem;
+					font-weight: 600;
+					color: #e6edf3;
+					margin-bottom: 10px;
+					padding-bottom: 6px;
+					border-bottom: 1px solid #1f2a37;
+				}
+				:host(.light-mode) .worldmap-layers-panel-title {
+					color: var(--text-primary);
+					border-bottom-color: var(--border-color);
+				}
+				.worldmap-layer-item {
+					display: flex;
+					align-items: center;
+					gap: 8px;
+					padding: 6px 0;
+					cursor: pointer;
+					font-size: 0.8rem;
+					color: #9fb0c0;
+				}
+				:host(.light-mode) .worldmap-layer-item {
+					color: var(--text-secondary);
+				}
+				.worldmap-layer-item:hover {
+					color: #e6edf3;
+				}
+				:host(.light-mode) .worldmap-layer-item:hover {
+					color: var(--text-primary);
+				}
+				.worldmap-layer-item input {
+					accent-color: #4ea1f3;
+					cursor: pointer;
+				}
+				.worldmap-layer-item input:checked ~ .worldmap-layer-label {
+					color: #e6edf3;
+					font-weight: 500;
+				}
+				:host(.light-mode) .worldmap-layer-item input:checked ~ .worldmap-layer-label {
+					color: var(--text-primary);
+				}
+				.worldmap-layer-legend {
+					flex-shrink: 0;
+					width: 20px;
+					height: 12px;
+					display: inline-flex;
+					align-items: center;
+					justify-content: center;
+				}
+				.worldmap-layer-legend svg {
+					display: block;
+				}
+				/* Leaflet popup dark theme */
+				.worldmap-container .leaflet-popup-content-wrapper {
+					background: #121821;
+					color: #e6edf3;
+					border: 1px solid #1f2a37;
+					border-radius: 10px;
+					box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+				}
+				.worldmap-container .leaflet-popup-tip {
+					background: #121821;
+				}
+				.worldmap-container .leaflet-popup-content {
+					margin: 12px 14px;
+					color: #e6edf3;
 				}
 				.column-title {
 					font-size: 1.3rem;
@@ -2689,7 +2874,7 @@ export class MarketOverview extends HTMLElement {
 				</div>
 			</div>
 			
-			<!-- Market News and Crypto Overview Section -->
+			<!-- Market News, Bloomberg Live, Crypto Overview Section -->
 			<div class="two-panel-layout">
 				<div class="left-panel">
 					<div class="section-group">
@@ -2707,6 +2892,14 @@ export class MarketOverview extends HTMLElement {
 						</div>
 						<div class="news-container" id="market-news-container">
 							<div class="loading">Loading market news <div class="loading-dots"><span></span><span></span><span></span></div></div>
+						</div>
+					</div>
+				</div>
+				<div class="middle-panel">
+					<div class="section-group">
+						<div class="column-title">Bloomberg Live</div>
+						<div class="livestream-container">
+							<iframe src="https://www.youtube.com/embed/iEpJwprxDdk?rel=0&autoplay=1&mute=1" title="Bloomberg Business News Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 						</div>
 					</div>
 				</div>
@@ -2748,6 +2941,66 @@ export class MarketOverview extends HTMLElement {
 						<div class="column-title">Commodities</div>
 						<div class="market-grid" id="commodities-grid">
 							<div class="loading">Loading commodities...</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			
+			<!-- Live Webcams Section (bottom of start page, YouTube only for reliability) -->
+			<div class="webcams-section">
+				<div class="section-group">
+					<div class="column-title">Live Webcams</div>
+					<div class="webcams-grid">
+						<div class="webcam-cell">
+							<div class="webcam-cell-title">New York – Times Square</div>
+							<div class="webcam-cell-iframe">
+								<iframe src="https://www.youtube.com/embed/kLfjr0nf5yc?autoplay=1&mute=1&rel=0" title="Times Square NYC Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+							</div>
+						</div>
+						<div class="webcam-cell">
+							<div class="webcam-cell-title">Washington DC</div>
+							<div class="webcam-cell-iframe">
+								<iframe src="https://www.youtube.com/embed/Fu8vYoIkaeM?autoplay=1&mute=1&rel=0" title="Washington DC Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+							</div>
+						</div>
+						<div class="webcam-cell">
+							<div class="webcam-cell-title">Odessa</div>
+							<div class="webcam-cell-iframe">
+								<iframe src="https://www.youtube.com/embed/R-qCsZ1obbc?autoplay=1&mute=1&rel=0" title="Odessa Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+							</div>
+						</div>
+						<div class="webcam-cell">
+							<div class="webcam-cell-title">Paris</div>
+							<div class="webcam-cell-iframe">
+								<iframe src="https://www.youtube.com/embed/OzYp4NRZlwQ?autoplay=1&mute=1&rel=0" title="Paris Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+							</div>
+						</div>
+						<div class="webcam-cell">
+							<div class="webcam-cell-title">Worldwide Webcam Tour</div>
+							<div class="webcam-cell-iframe">
+								<iframe src="https://www.youtube.com/embed/z7SiAaN4ogw?autoplay=1&mute=1&rel=0" title="Worldwide Webcam Tour" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+							</div>
+						</div>
+						<div class="webcam-cell">
+							<div class="webcam-cell-title">Tokyo</div>
+							<div class="webcam-cell-iframe">
+								<iframe src="https://www.youtube.com/embed/_k-5U7IeK8g?autoplay=1&mute=1&rel=0" title="Tokyo Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			
+			<!-- Global Map Section (below webcams) -->
+			<div class="worldmap-section">
+				<div class="section-group">
+					<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+					<div class="column-title">Global Map</div>
+					<div class="worldmap-wrapper">
+						<div id="worldmap-container" class="worldmap-container"></div>
+						<div class="worldmap-layers-panel" id="worldmap-layers-panel">
+							<div class="worldmap-layers-panel-title">Layers</div>
+							<div id="worldmap-layer-list"></div>
 						</div>
 					</div>
 				</div>
@@ -2849,6 +3102,11 @@ export class MarketOverview extends HTMLElement {
 			this.setupTopPerformersTicker();
 		}, 100);
 
+		// Global map (Leaflet) - init after DOM is ready
+		setTimeout(() => {
+			this.initWorldMap();
+		}, 500);
+
 		// Mobile rotate overlay - continue button
 		// Check if already dismissed (same storage key as MobileOrientationWarning)
 		const storageKey = 'mobile-orientation-warning-dismissed';
@@ -2877,6 +3135,442 @@ export class MarketOverview extends HTMLElement {
 			e.preventDefault();
 			window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'disclaimer' } }));
 		});
+	}
+
+	disconnectedCallback() {
+		if (this.worldMap) {
+			this.worldMap.remove();
+			this.worldMap = null;
+		}
+	}
+
+	initWorldMap() {
+		const container = this.shadowRoot.getElementById('worldmap-container');
+		const layerListEl = this.shadowRoot.getElementById('worldmap-layer-list');
+		if (!container || !layerListEl || typeof window.L === 'undefined') return;
+		if (this.worldMap) {
+			this.worldMap.remove();
+			this.worldMap = null;
+		}
+		const L = window.L;
+		const map = L.map(container, { center: [20, 0], zoom: 2, scrollWheelZoom: true });
+		this.worldMap = map;
+
+		L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+			attribution: '&copy; OpenStreetMap &copy; CARTO',
+			subdomains: 'abcd',
+			maxZoom: 19
+		}).addTo(map);
+
+		const bindTooltip = (feature, layer) => { if (feature.properties?.name) layer.bindTooltip(feature.properties.name); };
+		const bindPopupContent = (feature, layer) => {
+			const p = feature.properties || {};
+			const lines = [];
+			if (p.location) lines.push(`<strong>Location:</strong> ${p.location}`);
+			if (p.type) lines.push(`<strong>Type:</strong> ${p.type}`);
+			if (p.specialty) lines.push(`<strong>Specialty:</strong> ${p.specialty}`);
+			if (p.routeHint) lines.push(`<em style="font-size:0.9em;color:#9fb0c0;">${p.routeHint}</em>`);
+			const title = `<div style="font-weight:700;font-size:14px;margin-bottom:8px;color:#4ea1f3;">${p.name || 'Feature'}</div>`;
+			const body = lines.length ? `<div style="margin-bottom:6px;">${lines.join('<br>')}</div>` : '';
+			const desc = p.description ? `<p style="margin:6px 0 0 0;line-height:1.4;">${p.description}</p>` : '';
+			const role = p.role ? `<p style="margin:4px 0 0 0;font-size:0.9em;color:#9fb0c0;">${p.role}</p>` : '';
+			const content = `<div style="min-width:220px;max-width:300px;font-size:13px;">${title}${body}${desc}${role}</div>`;
+			layer.bindPopup(content, { maxWidth: 320, className: 'worldmap-popup' });
+		};
+		const onEachLine = (feature, layer) => { bindTooltip(feature, layer); bindPopupContent(feature, layer); };
+		const onEachPoint = (feature, layer) => { bindTooltip(feature, layer); bindPopupContent(feature, layer); };
+
+		let vesselRouteLayer = null;
+		const onEachVessel = (feature, layer) => {
+			bindTooltip(feature, layer);
+			bindPopupContent(feature, layer);
+			layer.on('click', async () => {
+				const mmsi = feature.properties?.mmsi;
+				if (!mmsi) return;
+				if (vesselRouteLayer) {
+					map.removeLayer(vesselRouteLayer);
+					vesselRouteLayer = null;
+				}
+				try {
+					const res = await fetch(`${API_BASE_URL}/api/vessels/${mmsi}/track`);
+					const data = await res.json();
+					const track = data.track || [];
+					const layersToAdd = [];
+					if (track.length >= 2) {
+						const latlngs = track.map(([lat, lon]) => [lat, lon]);
+						layersToAdd.push(L.polyline(latlngs, { color: '#f97316', weight: 2, opacity: 0.9 }));
+					}
+					const v = data.vessel;
+					if (v && v.lat != null && v.lon != null && (v.cog != null || v.cog === 0)) {
+						const cogRad = (typeof v.cog === 'number' ? v.cog : 0) * Math.PI / 180;
+						const dist = 0.2;
+						const lat2 = v.lat + dist * Math.cos(cogRad);
+						const lon2 = v.lon + dist * Math.sin(cogRad) / Math.cos((v.lat * Math.PI) / 180);
+						layersToAdd.push(L.polyline([[v.lat, v.lon], [lat2, lon2]], { color: '#22c55e', weight: 2, opacity: 0.8, dashArray: '5,5' }));
+					}
+					if (layersToAdd.length) {
+						vesselRouteLayer = layersToAdd.length === 1 ? layersToAdd[0] : L.layerGroup(layersToAdd);
+						vesselRouteLayer.addTo(map);
+					}
+				} catch (e) {
+					console.warn('Vessel track failed:', e);
+				}
+			});
+		};
+
+		// --- Layer definitions: id, label, createLayer(), defaultOn ---
+		const layerDefs = [];
+
+		// 1. Trade routes – loaded from open data (same source as shipping lanes, maritime routes)
+		const TRADE_ROUTES_DATA_URL = 'https://raw.githubusercontent.com/newzealandpaul/Shipping-Lanes/main/data/Shipping_Lanes_v1.geojson';
+		layerDefs.push({
+			id: 'trade-routes',
+			label: 'Trade routes',
+			defaultOn: true,
+			legend: { type: 'line', color: '#4ea1f3' },
+			dataUrl: TRADE_ROUTES_DATA_URL,
+			createFromGeoJSON: (geojson) => {
+				const features = (geojson && geojson.features) ? geojson.features : [];
+				features.forEach((f, i) => {
+					if (f.properties) {
+						const p = f.properties;
+						f.properties.name = p.name || p.Name || p.route_name || p.id || `Trade route ${i + 1}`;
+						f.properties.type = p.type || 'Trade route';
+						f.properties.description = p.description || p.Description || 'Maritime trade route (open data).';
+						f.properties.location = p.location || p.Location || '';
+					}
+				});
+				return L.geoJSON(geojson, { style: { color: '#4ea1f3', weight: 1.5, opacity: 0.85 }, onEachFeature: onEachLine });
+			}
+		});
+
+		// 2. Financial hubs (with detail for popup)
+		const hubsGeoJSON = {
+			type: 'FeatureCollection',
+			features: [
+				{ type: 'Feature', properties: { name: 'New York', location: 'New York, US', type: 'Financial hub', specialty: 'Equities, Derivatives, M&A', description: 'Largest global financial center by market cap.', role: 'Global capital markets hub' }, geometry: { type: 'Point', coordinates: [-74.006, 40.7128] } },
+				{ type: 'Feature', properties: { name: 'London', location: 'London, UK', type: 'Financial hub', specialty: 'FX, Derivatives, Banking', description: 'Leading FX and European banking center.', role: 'Global FX and European hub' }, geometry: { type: 'Point', coordinates: [-0.1276, 51.5074] } },
+				{ type: 'Feature', properties: { name: 'Tokyo', location: 'Tokyo, Japan', type: 'Financial hub', specialty: 'Equities, Banking', description: 'Major Asian financial center.', role: 'Asia-Pacific hub' }, geometry: { type: 'Point', coordinates: [139.6917, 35.6895] } },
+				{ type: 'Feature', properties: { name: 'Hong Kong', location: 'Hong Kong, HK', type: 'Financial hub', specialty: 'IPOs, Equities, Wealth management', description: 'China gateway financial hub.', role: 'Asia gateway' }, geometry: { type: 'Point', coordinates: [114.1694, 22.3193] } },
+				{ type: 'Feature', properties: { name: 'Singapore', location: 'Singapore', type: 'Financial hub', specialty: 'Wealth management, FX, Commodities', description: 'Leading Asian wealth and commodities hub.', role: 'Asia-Pacific finance hub' }, geometry: { type: 'Point', coordinates: [103.8198, 1.3521] } },
+				{ type: 'Feature', properties: { name: 'Frankfurt', location: 'Frankfurt, Germany', type: 'Financial hub', specialty: 'Banking, ECB, Equities', description: 'Eurozone banking and central bank hub.', role: 'Eurozone financial center' }, geometry: { type: 'Point', coordinates: [8.6821, 50.1109] } },
+				{ type: 'Feature', properties: { name: 'Zurich', location: 'Zurich, Switzerland', type: 'Financial hub', specialty: 'Wealth management, Banking', description: 'Global private banking center.', role: 'Wealth management hub' }, geometry: { type: 'Point', coordinates: [8.5417, 47.3769] } },
+				{ type: 'Feature', properties: { name: 'Dubai', location: 'Dubai, UAE', type: 'Financial hub', specialty: 'Islamic finance, Trade, Real estate', description: 'Middle East financial and trade hub.', role: 'GCC financial center' }, geometry: { type: 'Point', coordinates: [55.2708, 25.2048] } },
+				{ type: 'Feature', properties: { name: 'Shanghai', location: 'Shanghai, China', type: 'Financial hub', specialty: 'Equities, Bond market', description: 'Mainland China financial gateway.', role: 'China onshore hub' }, geometry: { type: 'Point', coordinates: [121.4737, 31.2304] } },
+				{ type: 'Feature', properties: { name: 'Sydney', location: 'Sydney, Australia', type: 'Financial hub', specialty: 'Equities, Banking', description: 'Australasia financial center.', role: 'APAC regional hub' }, geometry: { type: 'Point', coordinates: [151.2093, -33.8688] } }
+			]
+		};
+		layerDefs.push({ id: 'financial-hubs', label: 'Financial hubs', defaultOn: true, legend: { type: 'point', color: '#f59e0b' }, create: () => L.geoJSON(hubsGeoJSON, { pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 6, fillColor: '#f59e0b', color: '#fff', weight: 1, fillOpacity: 0.9 }), onEachFeature: onEachPoint }) });
+
+		// 3. Submarine cables – loaded via backend proxy (avoids CORS)
+		layerDefs.push({
+			id: 'submarine-cables',
+			label: 'Submarine cables',
+			defaultOn: true,
+			legend: { type: 'line', color: '#22c55e', dashArray: '5,5' },
+			dataUrl: `${API_BASE_URL}/api/map-layer/submarine-cables`,
+			createFromGeoJSON: (geojson) => {
+				const fc = geojson && geojson.features ? geojson : { type: 'FeatureCollection', features: [] };
+				const features = fc.features || [];
+				features.forEach((f, i) => {
+					if (f.properties) {
+						const p = f.properties;
+						f.properties.name = p.name || p.Name || p.Cable || p.cable || `Submarine cable ${i + 1}`;
+						f.properties.type = p.type || 'Submarine cable';
+						f.properties.description = p.description || p.Description || p.length_km ? `Length: ${p.length_km} km` : 'Submarine cable (open data).';
+						f.properties.location = p.location || p.Location || p.region || '';
+					}
+				});
+				return L.geoJSON(fc, { style: { color: '#22c55e', weight: 2, opacity: 0.9, dashArray: '5,5' }, onEachFeature: onEachLine });
+			}
+		});
+
+		// 4. Major ports (with descriptions)
+		const portsGeoJSON = {
+			type: 'FeatureCollection',
+			features: [
+				{ type: 'Feature', properties: { name: 'Rotterdam', location: 'Rotterdam, Netherlands', type: 'Port', description: 'Largest European port by throughput.', specialty: 'Containers, bulk' }, geometry: { type: 'Point', coordinates: [4.4777, 51.9225] } },
+				{ type: 'Feature', properties: { name: 'Singapore', location: 'Singapore', type: 'Port', description: 'World\'s busiest transhipment hub.', specialty: 'Containers, bunkering' }, geometry: { type: 'Point', coordinates: [103.8198, 1.2644] } },
+				{ type: 'Feature', properties: { name: 'Shanghai', location: 'Shanghai, China', type: 'Port', description: 'World\'s largest container port.', specialty: 'Containers' }, geometry: { type: 'Point', coordinates: [121.4737, 31.2304] } },
+				{ type: 'Feature', properties: { name: 'Los Angeles', location: 'LA/Long Beach, US', type: 'Port', description: 'Major US West Coast gateway.', specialty: 'Containers' }, geometry: { type: 'Point', coordinates: [-118.2437, 33.9717] } },
+				{ type: 'Feature', properties: { name: 'Hamburg', location: 'Hamburg, Germany', type: 'Port', description: 'Germany\'s largest port.', specialty: 'Containers, vehicles' }, geometry: { type: 'Point', coordinates: [9.9937, 53.5511] } },
+				{ type: 'Feature', properties: { name: 'Antwerp', location: 'Antwerp, Belgium', type: 'Port', description: 'Second largest European port.', specialty: 'Containers, chemicals' }, geometry: { type: 'Point', coordinates: [4.4042, 51.2213] } },
+				{ type: 'Feature', properties: { name: 'Busan', location: 'Busan, South Korea', type: 'Port', description: 'Largest port in South Korea.', specialty: 'Containers, transhipment' }, geometry: { type: 'Point', coordinates: [129.0756, 35.1796] } },
+				{ type: 'Feature', properties: { name: 'Dubai (Jebel Ali)', location: 'Dubai, UAE', type: 'Port', description: 'Major Middle East hub.', specialty: 'Containers, re-export' }, geometry: { type: 'Point', coordinates: [55.0, 25.0] } }
+			]
+		};
+		layerDefs.push({ id: 'ports', label: 'Major ports', defaultOn: true, legend: { type: 'point', color: '#3b82f6' }, create: () => L.geoJSON(portsGeoJSON, { pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, fillColor: '#3b82f6', color: '#fff', weight: 1, fillOpacity: 0.9 }), onEachFeature: onEachPoint }) });
+
+		// 5. Stock exchanges (with details)
+		const exchangesGeoJSON = {
+			type: 'FeatureCollection',
+			features: [
+				{ type: 'Feature', properties: { name: 'NYSE', location: 'New York, US', type: 'Stock exchange', specialty: 'Equities, ETFs', description: 'Largest stock exchange by market cap.' }, geometry: { type: 'Point', coordinates: [-74.0113, 40.7069] } },
+				{ type: 'Feature', properties: { name: 'NASDAQ', location: 'New York, US', type: 'Stock exchange', specialty: 'Tech, Equities', description: 'Second largest US exchange, tech-focused.' }, geometry: { type: 'Point', coordinates: [-74.006, 40.7589] } },
+				{ type: 'Feature', properties: { name: 'LSE', location: 'London, UK', type: 'Stock exchange', specialty: 'Equities, ETFs', description: 'Primary UK stock exchange.' }, geometry: { type: 'Point', coordinates: [-0.0982, 51.5142] } },
+				{ type: 'Feature', properties: { name: 'TSE', location: 'Tokyo, Japan', type: 'Stock exchange', specialty: 'Equities', description: 'Largest exchange in Japan.' }, geometry: { type: 'Point', coordinates: [139.7673, 35.6812] } },
+				{ type: 'Feature', properties: { name: 'HKEX', location: 'Hong Kong', type: 'Stock exchange', specialty: 'IPOs, Equities', description: 'Leading Asian listing venue.' }, geometry: { type: 'Point', coordinates: [114.1694, 22.2793] } },
+				{ type: 'Feature', properties: { name: 'Euronext', location: 'Paris/Amsterdam', type: 'Stock exchange', specialty: 'Equities, Derivatives', description: 'Pan-European exchange group.' }, geometry: { type: 'Point', coordinates: [2.3522, 48.8566] } },
+				{ type: 'Feature', properties: { name: 'SSE', location: 'Shanghai, China', type: 'Stock exchange', specialty: 'Equities, Bonds', description: 'Mainland China A-share market.' }, geometry: { type: 'Point', coordinates: [121.4975, 31.2304] } },
+				{ type: 'Feature', properties: { name: 'SIX', location: 'Zurich, Switzerland', type: 'Stock exchange', specialty: 'Equities, Structured products', description: 'Swiss exchange.' }, geometry: { type: 'Point', coordinates: [8.5417, 47.3769] } }
+			]
+		};
+		layerDefs.push({ id: 'exchanges', label: 'Stock exchanges', defaultOn: true, legend: { type: 'point', color: '#8b5cf6' }, create: () => L.geoJSON(exchangesGeoJSON, { pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, fillColor: '#8b5cf6', color: '#fff', weight: 1, fillOpacity: 0.9 }), onEachFeature: onEachPoint }) });
+
+		// 6. Pipelines – loaded via backend proxy (avoids CORS)
+		layerDefs.push({
+			id: 'pipelines',
+			label: 'Pipelines',
+			defaultOn: true,
+			legend: { type: 'line', color: '#ef4444' },
+			dataUrl: `${API_BASE_URL}/api/map-layer/pipelines`,
+			createFromGeoJSON: (geojson) => {
+				const fc = geojson && geojson.features ? geojson : { type: 'FeatureCollection', features: [] };
+				const features = fc.features || [];
+				features.forEach((f, i) => {
+					if (f.properties) {
+						const p = f.properties;
+						f.properties.name = p.name || p.Name || p.PIPELINE || p.type || `Pipeline ${i + 1}`;
+						f.properties.type = p.type || p.Type || 'Pipeline';
+						f.properties.description = p.description || p.Description || (p.STATUS ? `Status: ${p.STATUS}` : 'Oil/gas pipeline (open data).');
+						f.properties.location = p.location || p.Location || p.REGION || '';
+					}
+				});
+				return L.geoJSON(fc, { style: { color: '#ef4444', weight: 2, opacity: 0.85 }, onEachFeature: onEachLine });
+			}
+		});
+
+		// 7. Shipping lanes – loaded from open data (global shipping routes, CC-BY-4.0)
+		const SHIPPING_LANES_DATA_URL = 'https://raw.githubusercontent.com/newzealandpaul/Shipping-Lanes/main/data/Shipping_Lanes_v1.geojson';
+		layerDefs.push({
+			id: 'shipping',
+			label: 'Shipping lanes',
+			defaultOn: true,
+			dataUrl: SHIPPING_LANES_DATA_URL,
+			createFromGeoJSON: (geojson) => {
+				const features = (geojson && geojson.features) ? geojson.features : [];
+				features.forEach((f, i) => {
+					if (f.properties) {
+						const p = f.properties;
+						f.properties.name = p.name || p.Name || p.NAME || p.route_name || p.id || `Shipping route ${i + 1}`;
+						f.properties.type = p.type || 'Shipping lane';
+						f.properties.description = p.description || p.Description || 'Global shipping route (open data).';
+						f.properties.location = p.location || p.Location || '';
+					}
+				});
+				return L.geoJSON(geojson, { style: { color: '#06b6d4', weight: 1.5, opacity: 0.85 }, onEachFeature: onEachLine });
+			}
+		});
+
+		// 8. Economic zones
+		const sanctionsGeoJSON = {
+			type: 'FeatureCollection',
+			features: [
+				{ type: 'Feature', properties: { name: 'EU', location: 'European Union', type: 'Economic zone', description: 'Single market and customs union.' }, geometry: { type: 'Point', coordinates: [10.5, 50.5] } },
+				{ type: 'Feature', properties: { name: 'US', location: 'United States', type: 'Economic zone', description: 'Largest national economy.' }, geometry: { type: 'Point', coordinates: [-95.7, 37.1] } },
+				{ type: 'Feature', properties: { name: 'UK', location: 'United Kingdom', type: 'Economic zone', description: 'Major financial center post-Brexit.' }, geometry: { type: 'Point', coordinates: [-2.5, 54] } },
+				{ type: 'Feature', properties: { name: 'Japan', location: 'Japan', type: 'Economic zone', description: 'Third largest economy.' }, geometry: { type: 'Point', coordinates: [138.2, 36.2] } },
+				{ type: 'Feature', properties: { name: 'Australia', location: 'Australia', type: 'Economic zone', description: 'Commodity and services economy.' }, geometry: { type: 'Point', coordinates: [133.8, -25.3] } }
+			]
+		};
+		layerDefs.push({ id: 'economic-zones', label: 'Economic zones', defaultOn: true, legend: { type: 'point', color: '#a855f7' }, create: () => L.geoJSON(sanctionsGeoJSON, { pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 8, fillColor: '#a855f7', color: '#fff', weight: 1, fillOpacity: 0.6 }), onEachFeature: onEachPoint }) });
+
+		// 9. Natural resources – loaded from Natural Earth (geography regions / elevation points as proxy for resource regions)
+		const NATURAL_RESOURCES_DATA_URL = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_geography_regions_elevation_points.geojson';
+		layerDefs.push({
+			id: 'natural-resources',
+			label: 'Natural resources',
+			defaultOn: true,
+			dataUrl: NATURAL_RESOURCES_DATA_URL,
+			createFromGeoJSON: (geojson) => {
+				const features = (geojson && geojson.features) ? geojson.features : [];
+				features.forEach(f => {
+					if (f.properties) {
+						const p = f.properties;
+						f.properties.name = p.name || p.name_en || p.name_de || 'Region';
+						f.properties.type = p.featurecla || 'Natural region';
+						f.properties.description = p.description || (p.featurecla ? `${p.featurecla} (Natural Earth).` : 'Natural region (Natural Earth).');
+						f.properties.location = p.region || p.subregion || '';
+					}
+				});
+				return L.geoJSON(geojson, { pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, fillColor: '#eab308', color: '#fff', weight: 1, fillOpacity: 0.9 }), onEachFeature: onEachPoint });
+			}
+		});
+
+		// 10. Waterways – loaded from Natural Earth (full global rivers + lake centerlines)
+		const WATERWAYS_DATA_URL = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_rivers_lake_centerlines_scale_rank.geojson';
+		const normalizeNaturalEarthWaterway = (p) => ({
+			name: p.name || p.name_en || p.name_de || 'Unnamed',
+			type: p.featurecla || 'Waterway',
+			description: (p.featurecla === 'River' ? 'River (Natural Earth).' : 'Lake centerline (Natural Earth).'),
+			location: p.name ? '' : ''
+		});
+		layerDefs.push({
+			id: 'waterways',
+			label: 'Waterways',
+			defaultOn: true,
+			legend: { type: 'line', color: '#0ea5e9' },
+			dataUrl: WATERWAYS_DATA_URL,
+			createFromGeoJSON: (geojson) => {
+				const features = (geojson && geojson.features) ? geojson.features : [];
+				features.forEach(f => {
+					if (f.properties) {
+						const n = normalizeNaturalEarthWaterway(f.properties);
+						f.properties.name = n.name;
+						f.properties.type = n.type;
+						f.properties.description = n.description;
+						if (n.location) f.properties.location = n.location;
+					}
+				});
+				return L.geoJSON(geojson, { style: { color: '#0ea5e9', weight: 1.5, opacity: 0.75 }, onEachFeature: onEachLine });
+			}
+		});
+
+		// 11. Vessels (live AIS – Containerschiffe / cargo) – from backend /api/vessels
+		layerDefs.push({
+			id: 'vessels',
+			label: 'Vessels (Containerschiffe)',
+			defaultOn: false,
+			legend: { type: 'point', color: '#f97316' },
+			apiVessels: true
+		});
+
+		// Build layers and panel (async layers start as null; apiVessels also null)
+		const layerInstances = {};
+		const vesselRefreshIntervalIds = {};
+		layerDefs.forEach(def => {
+			if (def.dataUrl || def.apiVessels) {
+				layerInstances[def.id] = null;
+			} else {
+				layerInstances[def.id] = def.create();
+				if (def.defaultOn) layerInstances[def.id].addTo(map);
+			}
+		});
+
+		const getLegendSvg = (legend) => {
+			if (!legend) return '';
+			if (legend.type === 'line') {
+				const dash = legend.dashArray ? ` stroke-dasharray="${legend.dashArray}"` : '';
+				return `<svg width="20" height="12" viewBox="0 0 20 12" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="6" x2="20" y2="6" stroke="${legend.color}" stroke-width="2" stroke-linecap="round"${dash}/></svg>`;
+			}
+			if (legend.type === 'point') {
+				return `<svg width="20" height="12" viewBox="0 0 20 12" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="6" r="4" fill="${legend.color}" stroke="#fff" stroke-width="1"/></svg>`;
+			}
+			return '';
+		};
+
+		layerListEl.innerHTML = '';
+		layerDefs.forEach(def => {
+			const label = document.createElement('label');
+			label.className = 'worldmap-layer-item';
+			const cb = document.createElement('input');
+			cb.type = 'checkbox';
+			cb.dataset.layerId = def.id;
+			cb.checked = def.defaultOn;
+			const legendSpan = document.createElement('span');
+			legendSpan.className = 'worldmap-layer-legend';
+			legendSpan.innerHTML = getLegendSvg(def.legend) || '';
+			const span = document.createElement('span');
+			span.className = 'worldmap-layer-label';
+			span.textContent = def.label;
+			const loadAsyncLayer = async () => {
+				let layer = layerInstances[def.id];
+				if (layer != null) return layer;
+				span.textContent = def.label + ' (Laden…)';
+				try {
+					const res = await fetch(def.dataUrl);
+					const text = await res.text();
+					if (!res.ok) throw new Error(res.statusText || text.slice(0, 80));
+					let geojson;
+					try {
+						geojson = JSON.parse(text);
+					} catch (_) {
+						throw new Error('Invalid JSON (possibly CORS or server error)');
+					}
+					layer = def.createFromGeoJSON(geojson);
+					layerInstances[def.id] = layer;
+					span.textContent = def.label;
+					return layer;
+				} catch (e) {
+					span.textContent = def.label + ' (Fehler)';
+					console.warn('World map layer load failed:', def.id, e);
+					return null;
+				}
+			};
+			cb.addEventListener('change', async () => {
+				if (cb.checked) {
+					let layer = layerInstances[def.id];
+					if (def.apiVessels) {
+						const fetchVessels = async () => {
+							const b = map.getBounds();
+							const latmin = b.getSouth(), latmax = b.getNorth(), lonmin = b.getWest(), lonmax = b.getEast();
+							const url = `${API_BASE_URL}/api/vessels?latmin=${latmin}&latmax=${latmax}&lonmin=${lonmin}&lonmax=${lonmax}&cargoOnly=0`;
+							try {
+								const res = await fetch(url);
+								const text = await res.text();
+								if (!res.ok) throw new Error(res.statusText || text.slice(0, 80));
+								if (text.trim().toLowerCase().startsWith('<!')) throw new Error('API returned HTML (backend not reached)');
+								let geojson;
+								try {
+									geojson = JSON.parse(text);
+								} catch (_) {
+									throw new Error('Invalid JSON');
+								}
+								const oldLayer = layerInstances[def.id];
+								if (oldLayer) map.removeLayer(oldLayer);
+								const features = (geojson && geojson.features) ? geojson.features : [];
+								features.forEach(f => {
+									if (f.properties) {
+										const p = f.properties;
+										p.description = (p.shipType != null ? `Ship type: ${p.shipType}` : '') + (p.sog != null ? ` · Speed: ${Number(p.sog).toFixed(1)} kn` : '');
+										p.location = p.location || '';
+										p.routeHint = 'Klick zeichnet Route ein (zurückgelegte Strecke + Fahrtrichtung).';
+									}
+								});
+								layer = L.geoJSON(geojson, {
+									pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 6, fillColor: '#f97316', color: '#fff', weight: 1, fillOpacity: 0.9 }),
+									onEachFeature: onEachVessel
+								});
+								layerInstances[def.id] = layer;
+								layer.addTo(map);
+								span.textContent = def.label + ' (live)';
+								span.title = features.length === 0 ? 'Falls 0: AISSTREAM_API_KEY in .env setzen, Server neu starten. Daten kommen nach wenigen Sekunden.' : '';
+							} catch (e) {
+								span.textContent = def.label + ' (Fehler)';
+								console.warn('Vessels API failed:', e);
+							}
+						};
+						span.textContent = def.label + ' (Laden…)';
+						await fetchVessels();
+						if (vesselRefreshIntervalIds[def.id]) clearInterval(vesselRefreshIntervalIds[def.id]);
+						vesselRefreshIntervalIds[def.id] = setInterval(fetchVessels, 60000); // refresh every 60s
+					} else if (def.dataUrl && layer == null) {
+						layer = await loadAsyncLayer();
+						if (layer) layer.addTo(map);
+					} else if (layer) {
+						layer.addTo(map);
+					}
+				} else {
+					if (def.apiVessels && vesselRefreshIntervalIds[def.id]) {
+						clearInterval(vesselRefreshIntervalIds[def.id]);
+						vesselRefreshIntervalIds[def.id] = null;
+						span.textContent = def.label;
+					}
+					const layer = layerInstances[def.id];
+					if (layer) map.removeLayer(layer);
+				}
+			});
+			label.appendChild(cb);
+			if (legendSpan.innerHTML) label.appendChild(legendSpan);
+			label.appendChild(span);
+			layerListEl.appendChild(label);
+			// Trigger load on init for async layers that are defaultOn
+			if (def.dataUrl && def.defaultOn) {
+				loadAsyncLayer().then(layer => { if (layer) layer.addTo(map); });
+			}
+		});
+
+		setTimeout(() => { map.invalidateSize(); }, 100);
 	}
 
 	async loadMarketNews(filter = null) {
@@ -3449,9 +4143,9 @@ export class MarketOverview extends HTMLElement {
 			// Remove cache entries that start with 'stock_' for market indices and indicators
 			try {
 				const marketSymbols = [
-					'^GSPC', '^GDAXI', '^N225', '^NDX', '^HSI', '^FTSE', '^FCHI', '^SSMI', '^AXJO', '^GSPTSE', // Indices
+					'^GSPC', '^GDAXI', '^N225', '^NDX', '^HSI', '^FTSE', '^FCHI', '^SSMI', // Indices
 					'^VIX', 'DX-Y.NYB', 'GC=F', 'DGS10', 'T5YIFR', 'BAMLC0A0CM', 
-					'TEDRATE', 'STLFSI4', 'DCOILWTICO', 'DCOILBRENTEU', 'RRPONTSYD', // Macro indicators
+					'TEDRATE', 'DCOILWTICO', // Macro indicators
 					'EURUSD=X', 'GBPUSD=X', 'JPY=X', // Currencies
 					'SI=F', 'CL=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F' // Commodities
 				];
@@ -4170,9 +4864,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: '^HSI', name: 'Hang Seng', fallback: 'HSI' },
 			{ symbol: '^FTSE', name: 'FTSE 100', fallback: null },
 			{ symbol: '^FCHI', name: 'CAC 40', fallback: null },
-			{ symbol: '^SSMI', name: 'SMI', fallback: null },
-			{ symbol: '^AXJO', name: 'ASX 200', fallback: null },
-			{ symbol: '^GSPTSE', name: 'TSX', fallback: null }
+			{ symbol: '^SSMI', name: 'SMI', fallback: null }
 		];
 
 		// Macro Risk Indicators
@@ -4183,10 +4875,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: 'T5YIFR', name: '5y5y Inflation Expectations', description: '5-Year, 5-Year Forward Inflation Expectation', source: 'fred' },
 			{ symbol: 'BAMLC0A0CM', name: 'US Investment Grade OAS', description: 'Investment Grade Corporate Spread', source: 'fred' },
 			{ symbol: 'TEDRATE', name: 'TED Spread', description: 'Treasury-Eurodollar Spread', source: 'fred' },
-			{ symbol: 'STLFSI4', name: 'St. Louis Fed Financial Stress Index', description: 'Financial Stress Index', source: 'fred' },
 			{ symbol: 'DCOILWTICO', name: 'WTI Crude Oil Price', description: 'West Texas Intermediate', source: 'fred' },
-			{ symbol: 'DCOILBRENTEU', name: 'Brent Crude Oil Price', description: 'Brent Crude Oil', source: 'fred' },
-			{ symbol: 'RRPONTSYD', name: 'ON RRP Usage', description: 'Overnight Reverse Repo', source: 'fred' },
 			{ symbol: 'DX-Y.NYB', name: 'Dollar Index', description: 'USD Strength', source: 'yahoo', fallback: 'DX=F' },
 			{ symbol: 'GC=F', name: 'Gold', description: 'Safe Haven Asset', source: 'yahoo', fallback: 'GC' }
 		];
@@ -4556,9 +5245,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: '^HSI', name: 'Hang Seng', fallback: 'HSI' },
 			{ symbol: '^FTSE', name: 'FTSE 100', fallback: null },
 			{ symbol: '^FCHI', name: 'CAC 40', fallback: null },
-			{ symbol: '^SSMI', name: 'SMI', fallback: null },
-			{ symbol: '^AXJO', name: 'ASX 200', fallback: null },
-			{ symbol: '^GSPTSE', name: 'TSX', fallback: null }
+			{ symbol: '^SSMI', name: 'SMI', fallback: null }
 		];
 		
 		// Render indices
@@ -4580,10 +5267,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: 'T5YIFR', name: '5y5y Inflation Expectations', description: '5-Year, 5-Year Forward Inflation Expectation', source: 'fred' },
 			{ symbol: 'BAMLC0A0CM', name: 'US Investment Grade OAS', description: 'Investment Grade Corporate Spread', source: 'fred' },
 			{ symbol: 'TEDRATE', name: 'TED Spread', description: 'Treasury-Eurodollar Spread', source: 'fred' },
-			{ symbol: 'STLFSI4', name: 'St. Louis Fed Financial Stress Index', description: 'Financial Stress Index', source: 'fred' },
 			{ symbol: 'DCOILWTICO', name: 'WTI Crude Oil Price', description: 'West Texas Intermediate', source: 'fred' },
-			{ symbol: 'DCOILBRENTEU', name: 'Brent Crude Oil Price', description: 'Brent Crude Oil', source: 'fred' },
-			{ symbol: 'RRPONTSYD', name: 'ON RRP Usage', description: 'Overnight Reverse Repo', source: 'fred' },
 			{ symbol: 'DX-Y.NYB', name: 'Dollar Index', description: 'USD Strength', source: 'yahoo', fallback: 'DX=F' },
 			{ symbol: 'GC=F', name: 'Gold', description: 'Safe Haven Asset', source: 'yahoo', fallback: 'GC' }
 		];
@@ -4945,10 +5629,7 @@ export class MarketOverview extends HTMLElement {
 			{ symbol: 'T5YIFR', name: '5y5y Inflation Expectations', source: 'fred' },
 			{ symbol: 'BAMLC0A0CM', name: 'US Investment Grade OAS', source: 'fred' },
 			{ symbol: 'TEDRATE', name: 'TED Spread', source: 'fred' },
-			{ symbol: 'STLFSI4', name: 'St. Louis Fed Financial Stress Index', source: 'fred' },
 			{ symbol: 'DCOILWTICO', name: 'WTI Crude Oil Price', source: 'fred' },
-			{ symbol: 'DCOILBRENTEU', name: 'Brent Crude Oil Price', source: 'fred' },
-			{ symbol: 'RRPONTSYD', name: 'ON RRP Usage', source: 'fred' },
 			{ symbol: 'DX-Y.NYB', name: 'Dollar Index', source: 'yahoo' },
 			{ symbol: 'GC=F', name: 'Gold', source: 'yahoo' }
 		];
@@ -5407,10 +6088,7 @@ export class MarketOverview extends HTMLElement {
 			'5y5y Inflation Expectations': 'Long-term inflation outlook',
 			'US Investment Grade OAS': 'Corporate credit risk measure',
 			'TED Spread': 'Interbank lending risk indicator',
-			'St. Louis Fed Financial Stress Index': 'Financial market stress gauge',
 			'WTI Crude Oil Price': 'US oil benchmark price',
-			'Brent Crude Oil Price': 'International oil benchmark',
-			'ON RRP Usage': 'Federal Reserve liquidity tool',
 			'Dollar Index': 'US dollar strength measure',
 			'Gold': 'Precious metal safe haven asset',
 			'USD/EUR': 'Euro exchange rate',

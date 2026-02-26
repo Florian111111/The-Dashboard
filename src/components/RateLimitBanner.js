@@ -261,7 +261,7 @@ export class RateLimitBanner extends HTMLElement {
 					<div class="banner-title">Rate Limit Exceeded</div>
 					<div class="banner-description">${this.getLimitExplanation()}</div>
 					<div class="banner-conditions" style="margin-top: 8px; font-size: 0.85rem; opacity: 0.9;">
-						<strong>Usage Policy:</strong> 15 minutes of usage, then 15 minutes cooldown period
+						<strong>Usage Policy:</strong> 15 minutes of usage, then 1 minute cooldown period
 					</div>
 				</div>
 				</div>
