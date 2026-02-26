@@ -3429,7 +3429,7 @@ export class MarketOverview extends HTMLElement {
 		// 11. Vessels (live AIS – Containerschiffe / cargo) – from backend /api/vessels
 		layerDefs.push({
 			id: 'vessels',
-			label: 'Vessels (Containerschiffe)',
+			label: 'Vessels',
 			defaultOn: false,
 			legend: { type: 'point', color: '#f97316' },
 			apiVessels: true

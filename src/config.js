@@ -33,13 +33,16 @@ export const config = {
             return `${protocol}//${hostname}:3001`;
         }
 
-        // Production: Always use same origin
-        // Node.js server proxies /api/* requests to Python backend internally
+        // Production: use relative URLs so requests always go to the same host that served the page.
+        // This avoids proxy/routing issues where /api/map-layer/* or /api/vessels might return HTML.
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+            return '';
+        }
+
+        // Localhost with explicit port (e.g. dev server on different port)
         if (!port || port === '80' || port === '443') {
             return `${protocol}//${hostname}`;
         }
-
-        // Default: same origin (Node.js handles all API routing)
         return `${protocol}//${hostname}:${port}`;
     },
 
