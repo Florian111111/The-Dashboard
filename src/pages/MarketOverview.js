@@ -2410,87 +2410,6 @@ export class MarketOverview extends HTMLElement {
 					50% { opacity: 0.7; }
 				}
 				
-				/* ========== MOBILE PORTRAIT WARNING ========== */
-				.mobile-rotate-overlay {
-					display: none;
-					position: fixed;
-					top: 0;
-					left: 0;
-					width: 100vw;
-					height: 100vh;
-					background: linear-gradient(135deg, #0b0f14 0%, #121821 50%, #0b0f14 100%);
-					z-index: 10000;
-					flex-direction: column;
-					align-items: center;
-					justify-content: center;
-					text-align: center;
-					padding: 30px;
-					box-sizing: border-box;
-				}
-				.mobile-rotate-overlay.hidden {
-					display: none !important;
-				}
-				.rotate-content {
-					display: flex;
-					flex-direction: column;
-					align-items: center;
-					justify-content: center;
-					text-align: center;
-					max-width: 320px;
-				}
-				.rotate-icon {
-					font-size: 4rem;
-					margin-bottom: 24px;
-					animation: rotate-phone 2s ease-in-out infinite;
-				}
-				@keyframes rotate-phone {
-					0%, 100% { transform: rotate(0deg); }
-					25% { transform: rotate(-15deg); }
-					75% { transform: rotate(90deg); }
-				}
-				.rotate-title {
-					font-size: 1.5rem;
-					font-weight: 700;
-					color: #e6edf3;
-					margin-bottom: 16px;
-					text-align: center;
-				}
-				.rotate-message {
-					font-size: 1rem;
-					color: #9fb0c0;
-					line-height: 1.6;
-					text-align: center;
-					margin-bottom: 16px;
-				}
-				.rotate-hint {
-					font-size: 0.85rem;
-					color: #6b7280;
-					margin-bottom: 30px;
-				}
-				.rotate-continue-btn {
-					background: transparent;
-					border: 1px solid #374151;
-					color: #9fb0c0;
-					padding: 12px 24px;
-					border-radius: 8px;
-					font-size: 0.9rem;
-					cursor: pointer;
-					transition: all 0.2s ease;
-				}
-				.rotate-continue-btn:hover {
-					background: rgba(255, 255, 255, 0.05);
-					border-color: #4b5563;
-					color: #e6edf3;
-				}
-				
-				/* Show overlay only on mobile devices in portrait mode */
-				/* Note: JavaScript will control visibility based on dismissal state */
-				@media only screen and (max-width: 900px) and (orientation: portrait) {
-					.mobile-rotate-overlay:not(.hidden):not(.dismissed) {
-						display: flex;
-					}
-				}
-				
 				/* ========== MOBILE RESPONSIVE ========== */
 				@media only screen and (max-width: 1200px) {
 					:host {
@@ -2650,8 +2569,7 @@ export class MarketOverview extends HTMLElement {
 					.search-submit-btn,
 					.autocomplete-item,
 					.performers-tab,
-					.performers-close-btn,
-					.rotate-continue-btn {
+					.performers-close-btn {
 						min-height: 44px;
 						min-width: 44px;
 						padding: 12px 16px;
@@ -2704,20 +2622,6 @@ export class MarketOverview extends HTMLElement {
 					}
 				}
 			</style>
-			
-			<!-- Mobile Portrait Warning -->
-			<div class="mobile-rotate-overlay" id="mobile-rotate-overlay">
-				<div class="rotate-content">
-					<div class="rotate-icon">📱</div>
-					<div class="rotate-title">Please Rotate Your Device</div>
-					<div class="rotate-message">
-						For the best experience, please switch to landscape mode. 
-						This dashboard is optimized for wider screens.
-					</div>
-					<div class="rotate-hint">↻ Turn your phone sideways</div>
-					<button class="rotate-continue-btn" id="rotate-continue-btn">Continue in portrait mode</button>
-				</div>
-			</div>
 			
 			<!-- Top Performers Ticker Bar -->
 			<div class="ticker-bar-wrapper">
@@ -3101,28 +3005,6 @@ export class MarketOverview extends HTMLElement {
 		setTimeout(() => {
 			this.initWorldMap();
 		}, 500);
-
-		// Mobile rotate overlay - continue button
-		// Check if already dismissed (same storage key as MobileOrientationWarning)
-		const storageKey = 'mobile-orientation-warning-dismissed';
-		const rotateOverlay = this.shadowRoot.getElementById('mobile-rotate-overlay');
-		const continueBtn = this.shadowRoot.getElementById('rotate-continue-btn');
-		
-		// Check if already dismissed OR if global MobileOrientationWarning is showing
-		// Only show MarketOverview warning if global one doesn't exist or is hidden
-		const globalWarning = document.querySelector('mobile-orientation-warning');
-		const globalWarningOverlay = globalWarning?.shadowRoot?.querySelector('.mobile-warning-overlay');
-		const isGlobalWarningShowing = globalWarningOverlay?.classList.contains('show');
-		
-		if (sessionStorage.getItem(storageKey) === 'true' || isGlobalWarningShowing) {
-			rotateOverlay?.classList.add('hidden', 'dismissed');
-		}
-		
-		continueBtn?.addEventListener('click', () => {
-			rotateOverlay?.classList.add('hidden', 'dismissed');
-			// Save dismissal state so it won't reappear until page reload
-			sessionStorage.setItem(storageKey, 'true');
-		});
 
 		// Disclaimer link
 		const disclaimerLink = this.shadowRoot.getElementById('disclaimer-link-full');
