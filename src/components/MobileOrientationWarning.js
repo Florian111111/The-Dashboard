@@ -167,9 +167,9 @@ export class MobileOrientationWarning extends HTMLElement {
 				.warning-content {
 					background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
 					border-radius: 0;
-					padding: 40px 50px;
-					max-width: 600px;
-					width: 90%;
+					padding: 52px 56px;
+					max-width: 720px;
+					width: 94%;
 					box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 					border: 1px solid rgba(255, 255, 255, 0.1);
 					text-align: center;
@@ -209,12 +209,13 @@ export class MobileOrientationWarning extends HTMLElement {
 					background: linear-gradient(135deg, #4ea1f3 0%, #3b82f6 100%);
 					color: #ffffff;
 					border: none;
-					border-radius: 12px;
-					padding: 18px 32px;
-					font-size: 1.2rem;
+					border-radius: 14px;
+					padding: 22px 36px;
+					font-size: 1.35rem;
 					font-weight: 700;
 					cursor: pointer;
-					margin-top: 35px;
+					margin-top: 40px;
+					min-height: 62px;
 					box-shadow: 0 4px 16px rgba(78, 161, 243, 0.4);
 					transition: all 0.2s ease;
 					text-align: center;
@@ -295,22 +296,22 @@ export class MobileOrientationWarning extends HTMLElement {
 
 				/* Default styles - desktop and landscape */
 				.warning-title {
-					font-size: 1.8rem;
+					font-size: 2.2rem;
 					font-weight: 700;
 					color: #ffffff;
-					margin-bottom: 20px;
-					line-height: 1.3;
+					margin-bottom: 24px;
+					line-height: 1.25;
 				}
 
 				.warning-message {
-					font-size: 1.15rem;
+					font-size: 1.35rem;
 					color: #9fb0c0;
-					line-height: 1.7;
-					margin-bottom: 30px;
+					line-height: 1.55;
+					margin-bottom: 24px;
 				}
 
 				.recommendation {
-					font-size: 1rem;
+					font-size: 1.1rem;
 					color: #6b7a8a;
 					margin-top: 25px;
 					padding-top: 25px;
@@ -567,10 +568,10 @@ export class MobileOrientationWarning extends HTMLElement {
 					</div>
 					<h2 class="warning-title">Optimized for Desktop</h2>
 					<p class="warning-message">
-						This website is optimized for desktop viewing. For the best experience, we recommend accessing it from a computer or tablet in landscape mode.
+						Best viewed on desktop or in landscape mode.
 					</p>
 					<p class="recommendation">
-						💡 Tip: Rotate your device to landscape mode for a better viewing experience.
+						Rotate your device for better readability.
 					</p>
 					<button class="dismiss-button" id="dismiss-warning">Continue to Website</button>
 				</div>
