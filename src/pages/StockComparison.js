@@ -746,11 +746,6 @@ export class StockComparison extends HTMLElement {
 			});
 		});
 		
-		// Listen for rate limit cooldown events
-		window.addEventListener('rate-limit-cooldown', (e) => {
-			this.handleRateLimitCooldown(e.detail.active);
-		});
-		
 		// Disclaimer link
 		this.shadowRoot.getElementById('disclaimer-link-full')?.addEventListener('click', (e) => {
 			e.preventDefault();
@@ -758,42 +753,7 @@ export class StockComparison extends HTMLElement {
 		});
 	}
 	
-	handleRateLimitCooldown(active) {
-		const inputs = ['stock1-input', 'stock2-input', 'stock3-input'];
-		const compareBtn = this.shadowRoot.getElementById('compare-btn');
-		
-		inputs.forEach(id => {
-			const input = this.shadowRoot.getElementById(id);
-			if (input) {
-				input.disabled = active;
-				if (active) {
-					input.placeholder = 'Search disabled - Please wait for cooldown period';
-					input.style.opacity = '0.5';
-					input.style.cursor = 'not-allowed';
-				} else {
-					input.placeholder = 'Enter stock symbol';
-					input.style.opacity = '1';
-					input.style.cursor = 'text';
-				}
-			}
-		});
-		
-		if (compareBtn) {
-			compareBtn.disabled = active;
-			compareBtn.style.opacity = active ? '0.5' : '1';
-			compareBtn.style.cursor = active ? 'not-allowed' : 'pointer';
-		}
-		
-		// Hide autocomplete dropdowns
-		if (active) {
-			inputs.forEach(id => {
-				const dropdown = this.shadowRoot.querySelector(`#${id}-dropdown`);
-				if (dropdown) {
-					dropdown.classList.remove('show');
-				}
-			});
-		}
-	}
+	handleRateLimitCooldown(_active) {}
 	
 	async compareStocks() {
 		const stock1 = this.shadowRoot.getElementById('stock1-input').value.trim().toUpperCase();

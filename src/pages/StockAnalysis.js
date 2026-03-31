@@ -1039,11 +1039,6 @@ export class StockAnalysis extends HTMLElement {
 		// Setup autocomplete
 		this.setupAutocomplete();
 		
-		// Listen for rate limit cooldown events
-		window.addEventListener('rate-limit-cooldown', (e) => {
-			this.handleRateLimitCooldown(e.detail.active);
-		});
-		
 		this.shadowRoot.getElementById('search-btn')?.addEventListener('click', () => {
 			const symbol = this.shadowRoot.getElementById('symbol-input').value.trim().toUpperCase();
 			if (symbol) {
@@ -1934,33 +1929,6 @@ export class StockAnalysis extends HTMLElement {
 		       (infoModal && infoModal.classList.contains('show'));
 	}
 	
-	handleRateLimitCooldown(active) {
-		const input = this.shadowRoot.getElementById('symbol-input');
-		const searchBtn = this.shadowRoot.getElementById('search-btn');
-		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
-		
-		if (input) {
-			input.disabled = active;
-			if (active) {
-				input.placeholder = 'Search disabled - Please wait for cooldown period';
-				input.style.opacity = '0.5';
-				input.style.cursor = 'not-allowed';
-			} else {
-				input.placeholder = 'Search by name or symbol (e.g., Apple, AAPL)';
-				input.style.opacity = '1';
-				input.style.cursor = 'text';
-			}
-		}
-		
-		if (searchBtn) {
-			searchBtn.disabled = active;
-			searchBtn.style.opacity = active ? '0.5' : '1';
-			searchBtn.style.cursor = active ? 'not-allowed' : 'pointer';
-		}
-		
-		if (active && dropdown) {
-			dropdown.classList.remove('show');
-		}
-	}
+	handleRateLimitCooldown(_active) {}
 }
 
