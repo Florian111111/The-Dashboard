@@ -131,8 +131,8 @@ export class MobileOrientationWarning extends HTMLElement {
 					height: 100vh;
 					max-width: 100vw;
 					max-height: 100vh;
-					background: rgba(11, 15, 20, 0.98);
-					backdrop-filter: blur(10px);
+					background: rgba(11, 15, 20, 0.42);
+					backdrop-filter: blur(3px);
 					z-index: 10002;
 					display: flex;
 					flex-direction: column;
@@ -170,7 +170,7 @@ export class MobileOrientationWarning extends HTMLElement {
 					padding: 52px 56px;
 					max-width: 720px;
 					width: 94%;
-					box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+					box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
 					border: 1px solid rgba(255, 255, 255, 0.1);
 					text-align: center;
 					position: relative;
