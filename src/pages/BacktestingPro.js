@@ -1168,13 +1168,7 @@ export class BacktestingPro extends HTMLElement {
 		const callsLastMinute = this.apiCallHistory.filter(timestamp => timestamp > oneMinuteAgo).length;
 		const callsLastHour = this.apiCallHistory.length;
 		
-		if (callsLastMinute >= this.maxApiCallsPerMinute) {
-			throw new Error(`Rate limit exceeded: Maximum ${this.maxApiCallsPerMinute} API calls per minute. Please wait before trying again.`);
-		}
-		
-		if (callsLastHour >= this.maxApiCallsPerHour) {
-			throw new Error(`Rate limit exceeded: Maximum ${this.maxApiCallsPerHour} API calls per hour. Please wait before trying again.`);
-		}
+		// Cooldown/session restrictions are disabled: keep telemetry only.
 		
 		// Record this API call
 		this.apiCallHistory.push(now);

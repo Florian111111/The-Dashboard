@@ -3073,11 +3073,6 @@ export class MarketOverview extends HTMLElement {
 		// Search functionality with autocomplete
 		this.setupSearchAutocomplete();
 
-		// Listen for rate limit cooldown events
-		window.addEventListener('rate-limit-cooldown', (e) => {
-			this.handleRateLimitCooldown(e.detail.active);
-		});
-
 		// Setup touch gestures for mobile
 		this.setupTouchGestures();
 
@@ -6900,32 +6895,5 @@ export class MarketOverview extends HTMLElement {
 		}
 	}
 
-	handleRateLimitCooldown(active) {
-		const searchInput = this.shadowRoot.getElementById('stock-search-input');
-		const searchBtn = this.shadowRoot.getElementById('search-submit-btn');
-		const dropdown = this.shadowRoot.getElementById('autocomplete-dropdown');
-
-		if (searchInput) {
-			searchInput.disabled = active;
-			if (active) {
-				searchInput.placeholder = 'Search disabled - Please wait for cooldown period';
-				searchInput.style.opacity = '0.5';
-				searchInput.style.cursor = 'not-allowed';
-			} else {
-				searchInput.placeholder = 'Enter stock ticker (e.g., AAPL, MSFT) or search by name';
-				searchInput.style.opacity = '1';
-				searchInput.style.cursor = 'text';
-			}
-		}
-
-		if (searchBtn) {
-			searchBtn.disabled = active;
-			searchBtn.style.opacity = active ? '0.5' : '1';
-			searchBtn.style.cursor = active ? 'not-allowed' : 'pointer';
-		}
-
-		if (active && dropdown) {
-			dropdown.classList.remove('show');
-		}
-	}
+	handleRateLimitCooldown(_active) {}
 }

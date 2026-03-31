@@ -13,11 +13,8 @@ import { BacktestingPro } from './pages/BacktestingPro.js';
 import { PortfolioTracking } from './pages/PortfolioTracking.js';
 import { EconomicCalendar } from './pages/EconomicCalendar.js';
 import { CookieBanner } from './components/CookieBanner.js';
-import { RateLimitBanner } from './components/RateLimitBanner.js';
-import { SessionTimer } from './components/SessionTimer.js';
 import { MobileOrientationWarning } from './components/MobileOrientationWarning.js';
 import { ensureDefaultStorage } from './utils/storage.js';
-import { API_BASE_URL } from './config.js';
 
 ensureDefaultStorage();
 
@@ -82,12 +79,6 @@ class App {
 			if (!customElements.get('cookie-banner')) {
 				customElements.define('cookie-banner', CookieBanner);
 			}
-			if (!customElements.get('rate-limit-banner')) {
-				customElements.define('rate-limit-banner', RateLimitBanner);
-			}
-			if (!customElements.get('session-timer')) {
-				customElements.define('session-timer', SessionTimer);
-			}
 			if (!customElements.get('mobile-orientation-warning')) {
 				customElements.define('mobile-orientation-warning', MobileOrientationWarning);
 			}
@@ -104,119 +95,16 @@ class App {
 				}
 			}
 
-			// FIRST: Check if cooldown period is active - if so, delete session_end_timestamp immediately
-			const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
-			let cooldownActive = false;
-			if (cooldownEndTimestamp) {
-				const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
-				const now = Date.now();
-				const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
-				if (cooldownRemaining > 0) {
-					cooldownActive = true;
-					console.log('[App] Cooldown period active, cannot start session. Remaining:', cooldownRemaining, 'seconds');
-					// CRITICAL: Delete session_end_timestamp immediately if cooldown is active
-					localStorage.removeItem('session_end_timestamp');
-				}
-			}
-			
-			// Add rate limit banner to body FIRST (so it can restore cooldown before SessionTimer tries to restore session)
-			if (!document.querySelector('rate-limit-banner')) {
-				const rateLimitBanner = document.createElement('rate-limit-banner');
-				document.body.appendChild(rateLimitBanner);
-				this.rateLimitBanner = rateLimitBanner;
-			} else {
-				this.rateLimitBanner = document.querySelector('rate-limit-banner');
-			}
-
-			// Add session timer to body AFTER rate limit banner
-			if (!document.querySelector('session-timer')) {
-				const sessionTimer = document.createElement('session-timer');
-				document.body.appendChild(sessionTimer);
-				this.sessionTimer = sessionTimer;
-			} else {
-				this.sessionTimer = document.querySelector('session-timer');
-			}
-			
-			// Track if session has been started (to show timer on first click)
-			// Only restore session if cooldown is NOT active
-			if (!cooldownActive) {
-				const sessionEndTimestamp = localStorage.getItem('session_end_timestamp');
-				if (sessionEndTimestamp) {
-					const sessionEnd = parseInt(sessionEndTimestamp, 10);
-					const now = Date.now();
-					const remaining = Math.max(0, Math.floor((sessionEnd - now) / 1000));
-					
-					if (remaining > 0) {
-						// Session still active - timer will be restored by SessionTimer.connectedCallback
-						this.sessionStarted = true;
-						console.log('[App] Session exists in localStorage, will be restored by SessionTimer');
-					} else {
-						// Session expired - remove from localStorage
-						localStorage.removeItem('session_end_timestamp');
-						this.sessionStarted = false;
-					}
-				} else {
-					this.sessionStarted = false;
-				}
-			} else {
-				// Cooldown active - don't allow session start
-				this.sessionStarted = false;
-			}
-			
-			// Add global click listener to start session timer on first user interaction
-			// Session only starts on click - not on page load (prevents banner appearing immediately)
-			const SESSION_DURATION_SECONDS = 900; // 15 minutes
-			document.addEventListener('click', async (e) => {
-				if (!this.sessionStarted && this.sessionTimer) {
-					// Check if cooldown period is active - if so, don't start session
-					const cooldownEndTimestamp = localStorage.getItem('cooldown_end_timestamp');
-					if (cooldownEndTimestamp) {
-						const cooldownEnd = parseInt(cooldownEndTimestamp, 10);
-						const now = Date.now();
-						const cooldownRemaining = Math.max(0, Math.floor((cooldownEnd - now) / 1000));
-						if (cooldownRemaining > 0) {
-							// Cooldown is still active - don't start session
-							console.log('[Session Timer] Cooldown period active, cannot start session. Remaining:', cooldownRemaining, 'seconds');
-							return;
-						}
-					}
-					
-					// Check again if session exists (might have been restored)
-					const existingSession = localStorage.getItem('session_end_timestamp');
-					if (!existingSession) {
-						console.log('[Session Timer] First click detected, starting session (15 min)');
-						this.sessionStarted = true;
-						// Start backend session first (required for fundamentals, heatmap-quotes, etc.)
-						try {
-							const response = await fetch(`${API_BASE_URL}/api/session-start`, { method: 'POST' });
-							if (response.ok) {
-								const data = await response.json();
-								let sessionRemaining = data.session_remaining ?? SESSION_DURATION_SECONDS;
-								// Ensure at least 15 min (backend may have old 5-min config)
-								if (sessionRemaining < 600) sessionRemaining = SESSION_DURATION_SECONDS;
-								this.sessionTimer.show(sessionRemaining);
-							} else {
-								// Fallback to local timer if session-start fails (e.g. backend down)
-								this.sessionTimer.show(SESSION_DURATION_SECONDS);
-							}
-						} catch (err) {
-							console.warn('[Session Timer] session-start failed, using local timer:', err.message);
-							this.sessionTimer.show(SESSION_DURATION_SECONDS);
-						}
-					} else {
-						this.sessionStarted = true;
-					}
-				}
-			}, { once: false, capture: true });
+			// Session/cooldown is disabled: clear any old persisted state.
+			localStorage.removeItem('cooldown_end_timestamp');
+			localStorage.removeItem('session_end_timestamp');
+			localStorage.removeItem('session_duration');
 
 			// Add mobile orientation warning to body
 			if (!document.querySelector('mobile-orientation-warning')) {
 				const mobileWarning = document.createElement('mobile-orientation-warning');
 				document.body.appendChild(mobileWarning);
 			}
-
-			// Setup global fetch interceptor for rate limiting
-			this.setupRateLimitInterceptor();
 
 			// Listen for navigation events
 			window.addEventListener('navigate', (e) => {

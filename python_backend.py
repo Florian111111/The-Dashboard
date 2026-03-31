@@ -241,82 +241,12 @@ def check_session_rate_limit(ip: str, start_session_if_new: bool = False) -> dic
     
     Returns: {"allowed": bool, "retry_after": int, "session_remaining": int}
     """
-    now = time.time()
-    
-    if ip not in session_rate_limit_cache:
-        # First time user - only start session if API is actually being used
-        if start_session_if_new:
-            session_rate_limit_cache[ip] = {
-                'session_start': now,
-                'session_end': now + SESSION_DURATION,
-                'cooldown_end': None
-            }
-            return {
-                "allowed": True,
-                "retry_after": 0,
-                "session_remaining": SESSION_DURATION
-            }
-        else:
-            # No session - user must call /api/session-start first (on first click)
-            return {
-                "allowed": False,
-                "retry_after": 0,
-                "session_remaining": 0  # No session - click to start
-            }
-    
-    entry = session_rate_limit_cache[ip]
-    
-    # Check if in cooldown period
-    if entry.get('cooldown_end') and now < entry['cooldown_end']:
-        retry_after = int(entry['cooldown_end'] - now)
-        return {
-            "allowed": False,
-            "retry_after": retry_after,
-            "session_remaining": 0
-        }
-    
-    # Check if cooldown has ended
-    if entry.get('cooldown_end') and now >= entry['cooldown_end']:
-        # Cooldown ended - but only start new session if user is making an API request
-        if start_session_if_new:
-            # User is making an API request after cooldown - start new session
-            entry['session_start'] = now
-            entry['session_end'] = now + SESSION_DURATION
-            entry['cooldown_end'] = None
-            session_remaining = SESSION_DURATION
-            return {
-                "allowed": True,
-                "retry_after": 0,
-                "session_remaining": session_remaining
-            }
-        else:
-            # Cooldown ended but no session started yet - user must click to start
-            del session_rate_limit_cache[ip]
-            return {
-                "allowed": False,
-                "retry_after": 0,
-                "session_remaining": 0  # No session - click to start
-            }
-    
-    # Check if session has expired
-    if entry.get('session_end') and now >= entry['session_end']:
-        # Session expired - start cooldown
-        entry['cooldown_end'] = now + COOLDOWN_DURATION
-        entry['session_start'] = None
-        entry['session_end'] = None
-        retry_after = COOLDOWN_DURATION
-        return {
-            "allowed": False,
-            "retry_after": retry_after,
-            "session_remaining": 0
-        }
-    
-    # Session is active - timer continues from original start (NOT reset on new requests)
-    session_remaining = int(entry['session_end'] - now)
+    # Session/cooldown limits are disabled globally.
+    # Keep response shape for compatibility with existing callers.
     return {
         "allowed": True,
         "retry_after": 0,
-        "session_remaining": session_remaining
+        "session_remaining": SESSION_DURATION
     }
 
 # Old advanced rate limit function removed - using session-based rate limiting instead
